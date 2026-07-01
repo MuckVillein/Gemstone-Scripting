@@ -10,7 +10,6 @@ that note inline next to the item name everywhere it appears in game text.
 Item identity survives locker storage by matching on name and container.
 
 The following inputs are available:
-  ;isharpie                              - status
   ;isharpie tag <noun> "<note>" [color orange|teal|green|yellow|none]  - tag item in hand
   ;isharpie color <name>                 - set color on last tagged item
   ;isharpie remove <noun>                - remove note from item in hand
@@ -22,18 +21,19 @@ The following inputs are available:
       Other scripts: Combatical, Merchantical, Loresang, VolnRestore2
       game: gs
       tags: items, inventory, notes, highlight, Sharpie
-      version: 1.0.3
+      version: 1.0.5
       required: Lich > 5.0
 
       \\Version\\
       1.0.0 07/01/2026 - initial release
       1.0.1 07/01/2026 - changed notes and fixed color name
       1.0.3 07/01/2026 - notes now saved to EduBarbarian\isharpie_name for persistence
+      1.0.5 07/01/2026 - improved item detection: auto-bind on first sighting, word-set name matching
 
 =end
 
 module ISharpie
-  VERSION = '1.0.3'.freeze
+  VERSION = '1.0.5'.freeze
 
   VALID_COLORS = %w[orange teal green yellow none].freeze
 
@@ -149,11 +149,26 @@ module ISharpie
     # "masterful") in display output but omits them from hand-tag updates, so
     # GameObj.right_hand.name at tag-time may be shorter than what the stream
     # shows. If no exact match, accept any stored name that is a trailing
-    # suffix of the stream name (guards against exact-match false-positives
-    # since those are already caught above).
+    # suffix of the stream name.
     if matches.empty?
       matches = notes.select { |n|
         n[:long_name].length < long_name.length && long_name.end_with?(n[:long_name])
+      }
+    end
+
+    # Word-set fallback: GS4 sometimes omits descriptors from worn/display names
+    # that were present when held (e.g. "haon antlers" worn vs "haon-carved antlers"
+    # held). If still no match, accept any stored name where every word from the
+    # shorter name appears in the longer name. Requires at least 2 words to avoid
+    # single-noun false positives.
+    if matches.empty?
+      stream_words = long_name.downcase.gsub(/[^a-z0-9\s]/, ' ').split
+      stream_noun  = stream_words.last
+      matches = notes.select { |n|
+        stored_words = n[:long_name].downcase.gsub(/[^a-z0-9\s]/, ' ').split
+        next false unless stored_words.last == stream_noun
+        short, long_w = [stream_words, stored_words].minmax_by(&:length)
+        short.length >= 2 && short.all? { |w| long_w.include?(w) }
       }
     end
 
@@ -254,6 +269,7 @@ module ISharpie
     return line if notes.empty? && @exist_bindings.empty?
     line.gsub(ITEM_TAG_RX) do |whole_match|
       exist_id, _noun, tag_text, trailing = $1, $2, $3, $4
+      next whole_match if exist_id.to_i < 0
       long_name = "#{tag_text}#{sanitize_trailing(trailing)}".strip
       next whole_match if long_name.empty?
 
@@ -264,7 +280,18 @@ module ISharpie
         note ? (tag_only + format_annotation(note, confirmed: true) + trailing) : whole_match
       else
         candidates = candidates_for(long_name)
-        candidates.size == 1 ? (tag_only + format_annotation(candidates.first, confirmed: false) + trailing) : whole_match
+        # If the trailing clause ("with a rippling green sheen...") prevented a
+        # match, retry using only the tag text itself - the trailing clause is
+        # narrative description, not part of the item's identity.
+        if candidates.empty? && !tag_text.strip.empty? && tag_text.strip != long_name
+          candidates = candidates_for(tag_text.strip)
+        end
+        if candidates.size == 1
+          bind!(exist_id, candidates.first[:id])
+          tag_only + format_annotation(candidates.first, confirmed: true) + trailing
+        else
+          whole_match
+        end
       end
     end
   rescue StandardError => e
@@ -592,7 +619,6 @@ module ISharpie
     _respond ''
     _respond g.call('  Review')
     _respond "  #{w.call(';isharpie list')}  list all stored notes"
-    _respond "  #{w.call(';isharpie')}  status"
     _respond ''
     _respond g.call('  Notes')
     _respond '  item id resets each login, after locker storage, or scripted item mutations - matched automatically by name'
