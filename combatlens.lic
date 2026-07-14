@@ -1,0 +1,267 @@
+=begin
+  Combat Lens Bridge  —  Lich5 companion script
+  --------------------------------------------------------------
+  Forwards GemStone's live game feed to the Combat Lens web
+  dashboard (combat_dashboard.html) over a local WebSocket.
+
+  It sends two kinds of messages:
+    { "t":"line",  "text":"<clean game text line>" }   <- combat narrative
+    { "t":"state", ... }                                <- authoritative
+        vitals / hands / stance / status from Lich's XMLData
+
+  The dashboard parses "line" for the combat story and uses
+  "state" for the exact vital rings, equipment, posture and
+  status icons (the stuff the plain .log file throws away).
+
+  USAGE
+    1. Put this file in your Lich 'scripts' folder.
+    2. In game:   ;combatlens
+    3. Open combat_dashboard.html in a browser and click "Live".
+    4. Stop with: ;kill combatlens   (or ;e stop_script 'combatlens')
+
+  Nothing is sent anywhere off your machine — the socket only
+  listens on 127.0.0.1 (localhost).
+  --------------------------------------------------------------
+=end
+
+require 'socket'
+require 'digest/sha1'
+require 'base64'
+require 'json'
+require 'open3'
+
+PORT = 8777
+HOST = '127.0.0.1'
+
+$cl_clients = []
+$cl_mutex   = Mutex.new
+$cl_run     = true
+
+# ---- minimal RFC6455 server->client text frame (unmasked) ----
+def cl_frame(msg)
+  data = msg.dup.force_encoding('BINARY')
+  n = data.bytesize
+  out = String.new(encoding: 'BINARY')
+  out << 0x81  # FIN + text opcode
+  if n < 126
+    out << n
+  elsif n < 65536
+    out << 126 << ((n >> 8) & 0xff) << (n & 0xff)
+  else
+    out << 127
+    7.downto(0) { |i| out << ((n >> (8 * i)) & 0xff) }
+  end
+  out << data
+  out
+end
+
+def cl_broadcast(hash)
+  msg = JSON.generate(hash)
+  frame = cl_frame(msg)
+  $cl_mutex.synchronize do
+    $cl_clients.reject! do |c|
+      begin
+        c.write(frame); false
+      rescue
+        (c.close rescue nil); true
+      end
+    end
+  end
+end
+
+# ---- WebSocket handshake ----
+def cl_handshake(sock)
+  req = sock.readpartial(4096)
+  key = req[/Sec-WebSocket-Key:\s*(.+)\r\n/i, 1]
+  return false unless key
+  # Cheap guard: real websites send their own https://... Origin header on a WebSocket handshake;
+  # a local file:// dashboard page sends "Origin: null" (or omits it). Reject anything else so a
+  # random page open in another tab can't silently talk to this bridge -- which now, via
+  # install_ollama below, can launch a local installer on request. Not bulletproof, but cheap and
+  # blocks the common case.
+  origin = req[/Origin:\s*(.+)\r\n/i, 1]
+  origin = origin.strip if origin
+  if origin && !origin.empty? && origin.downcase != 'null'
+    respond "[combatlens] rejected WS handshake from origin: #{origin}"
+    return false
+  end
+  accept = Base64.strict_encode64(
+    Digest::SHA1.digest(key.strip + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+  )
+  sock.write(
+    "HTTP/1.1 101 Switching Protocols\r\n" \
+    "Upgrade: websocket\r\n" \
+    "Connection: Upgrade\r\n" \
+    "Sec-WebSocket-Accept: #{accept}\r\n\r\n"
+  )
+  true
+end
+
+# ---- incoming (client -> server) frame decoding; client frames are always masked ----
+def cl_read_frame(sock)
+  header = sock.read(2)
+  return nil unless header && header.bytesize == 2
+  b1, b2 = header.bytes
+  opcode = b1 & 0x0f
+  masked = (b2 & 0x80) != 0
+  len = b2 & 0x7f
+  if len == 126
+    ext = sock.read(2); return nil unless ext
+    len = ext.unpack1('n')
+  elsif len == 127
+    ext = sock.read(8); return nil unless ext
+    len = ext.unpack1('Q>')
+  end
+  mask_key = masked ? sock.read(4)&.bytes : nil
+  payload = len > 0 ? sock.read(len) : ''
+  return nil if len > 0 && payload.nil?
+  if masked && payload && !payload.empty?
+    bytes = payload.bytes.each_with_index.map { |b, i| b ^ mask_key[i % 4] }
+    payload = bytes.pack('C*')
+  end
+  { opcode: opcode, data: payload }
+end
+
+$cl_install_running = false
+# Runs the exact, hardcoded Ollama installer command -- never anything client-supplied -- so even
+# an unauthorized connection can only trigger this one fixed action, not arbitrary commands.
+def cl_install_ollama
+  return if $cl_install_running
+  $cl_install_running = true
+  cl_broadcast(t: 'install_status', phase: 'start', msg: 'Starting Ollama install via PowerShell...')
+  begin
+    cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+           'irm https://ollama.com/install.ps1 | iex']
+    out = String.new
+    Open3.popen2e(*cmd) do |stdin, stdout_err, wait_thr|
+      stdin.close rescue nil
+      stdout_err.each_line do |line|
+        out << line
+        out = out[-4000..-1] if out.bytesize > 4000
+        cl_broadcast(t: 'install_status', phase: 'progress', msg: line.strip) unless line.strip.empty?
+      end
+      status = wait_thr.value
+      ok = status.success?
+      cl_broadcast(t: 'install_status', phase: 'done', ok: ok,
+                   msg: (ok ? 'Ollama install finished.' : "Install exited with status #{status.exitstatus}."),
+                   output: out)
+    end
+  rescue => e
+    cl_broadcast(t: 'install_status', phase: 'done', ok: false, msg: "Failed to launch installer: #{e.message}")
+  ensure
+    $cl_install_running = false
+  end
+end
+
+def cl_handle_client_message(msg)
+  case msg['t']
+  when 'install_ollama'
+    Thread.new { cl_install_ollama }
+  end
+end
+
+def cl_client_reader(sock)
+  loop do
+    frame = cl_read_frame(sock)
+    break unless frame
+    case frame[:opcode]
+    when 0x1 # text frame
+      begin
+        msg = JSON.parse(frame[:data])
+        cl_handle_client_message(msg)
+      rescue => e
+        respond "[combatlens] bad client message: #{e.message}"
+      end
+    when 0x8 # close frame
+      break
+    end
+  end
+rescue
+  # connection closed / read error -- fall through to cleanup below
+ensure
+  $cl_mutex.synchronize { $cl_clients.delete(sock) }
+  sock.close rescue nil
+end
+
+# ---- accept loop ----
+def cl_server_thread
+  server = TCPServer.new(HOST, PORT)
+  respond "[combatlens] listening on ws://#{HOST}:#{PORT}"
+  while $cl_run
+    begin
+      client = server.accept
+      if cl_handshake(client)
+        $cl_mutex.synchronize { $cl_clients << client }
+        respond "[combatlens] dashboard connected (#{$cl_clients.size} live)"
+        cl_broadcast_state  # push an immediate snapshot to the new client
+        Thread.new { cl_client_reader(client) }
+      else
+        client.close rescue nil
+      end
+    rescue => e
+      respond "[combatlens] accept error: #{e.message}" if $cl_run
+    end
+  end
+  server.close rescue nil
+end
+
+# ---- build a state snapshot from Lich's parsed XML ----
+def cl_state
+  ind = (XMLData.indicator rescue {}) || {}
+  {
+    t:          'state',
+    char:       (Char.name rescue (XMLData.name rescue 'You')),
+    health:     (XMLData.health rescue 0),
+    maxhealth:  (XMLData.max_health rescue 0),
+    mana:       (XMLData.mana rescue 0),
+    maxmana:    (XMLData.max_mana rescue 0),
+    stamina:    (XMLData.stamina rescue 0),
+    maxstamina: (XMLData.max_stamina rescue 0),
+    spirit:     (XMLData.spirit rescue 0),
+    maxspirit:  (XMLData.max_spirit rescue 0),
+    stance:     (XMLData.stance_text rescue ''),
+    rt:         ([0, ((XMLData.roundtime_end rescue 0) - Time.now.to_i)].max),
+    left:       (GameObj.left_hand.name rescue nil),
+    right:      (GameObj.right_hand.name rescue nil),
+    indicators: ind
+  }
+end
+
+$cl_last = nil
+def cl_broadcast_state
+  s = cl_state
+  key = s.reject { |k, _| k == :rt }.to_s
+  # always send if rt is ticking, else only on change
+  if key != $cl_last || s[:rt].to_i > 0
+    $cl_last = key
+    cl_broadcast(s)
+  end
+end
+
+# ---- clean up on exit ----
+before_dying do
+  $cl_run = false
+  $cl_mutex.synchronize { $cl_clients.each { |c| c.close rescue nil } }
+  respond '[combatlens] bridge stopped.'
+end
+
+# ---- start network + state poller ----
+Thread.new { cl_server_thread }
+Thread.new do
+  while $cl_run
+    begin
+      cl_broadcast_state unless $cl_clients.empty?
+    rescue => e
+      respond "[combatlens] state error: #{e.message}"
+    end
+    sleep 0.3
+  end
+end
+
+# ---- main loop: forward every clean game line for combat parsing ----
+respond '[combatlens] running. Open the dashboard and click Live.'
+loop do
+  line = get            # blocks for the next downstream (clean text) line
+  next if line.nil?
+  cl_broadcast(t: 'line', text: line) unless $cl_clients.empty?
+end
