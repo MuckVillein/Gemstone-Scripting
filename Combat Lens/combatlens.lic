@@ -1,0 +1,159 @@
+=begin
+  Combat Lens Bridge  —  Lich5 companion script
+  --------------------------------------------------------------
+  Forwards GemStone's live game feed to the Combat Lens web
+  dashboard (combat_dashboard.html) over a local WebSocket.
+
+  It sends two kinds of messages:
+    { "t":"line",  "text":"<clean game text line>" }   <- combat narrative
+    { "t":"state", ... }                                <- authoritative
+        vitals / hands / stance / status from Lich's XMLData
+
+  The dashboard parses "line" for the combat story and uses
+  "state" for the exact vital bars, equipment, posture and
+  status icons (the stuff the plain .log file throws away).
+
+  USAGE
+    1. Put this file in your Lich 'scripts' folder.
+    2. In game:   ;combatlens
+    3. Open combat_dashboard.html in a browser and click "Live".
+    4. Stop with: ;kill combatlens
+
+  Nothing is sent off your machine — the socket only listens on
+  127.0.0.1 (localhost).
+  --------------------------------------------------------------
+=end
+
+require 'socket'
+require 'digest/sha1'
+require 'base64'
+require 'json'
+
+PORT = 8777
+HOST = '127.0.0.1'
+
+$cl_clients = []
+$cl_mutex   = Mutex.new
+$cl_run     = true
+
+def cl_frame(msg)
+  data = msg.dup.force_encoding('BINARY')
+  n = data.bytesize
+  out = String.new(encoding: 'BINARY')
+  out << 0x81  # FIN + text opcode
+  if n < 126
+    out << n
+  elsif n < 65536
+    out << 126 << ((n >> 8) & 0xff) << (n & 0xff)
+  else
+    out << 127
+    7.downto(0) { |i| out << ((n >> (8 * i)) & 0xff) }
+  end
+  out << data
+  out
+end
+
+def cl_broadcast(hash)
+  frame = cl_frame(JSON.generate(hash))
+  $cl_mutex.synchronize do
+    $cl_clients.reject! do |c|
+      begin
+        c.write(frame); false
+      rescue
+        (c.close rescue nil); true
+      end
+    end
+  end
+end
+
+def cl_handshake(sock)
+  req = sock.readpartial(4096)
+  key = req[/Sec-WebSocket-Key:\s*(.+)\r\n/i, 1]
+  return false unless key
+  accept = Base64.strict_encode64(
+    Digest::SHA1.digest(key.strip + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+  )
+  sock.write(
+    "HTTP/1.1 101 Switching Protocols\r\n" \
+    "Upgrade: websocket\r\n" \
+    "Connection: Upgrade\r\n" \
+    "Sec-WebSocket-Accept: #{accept}\r\n\r\n"
+  )
+  true
+end
+
+def cl_server_thread
+  server = TCPServer.new(HOST, PORT)
+  respond "[combatlens] listening on ws://#{HOST}:#{PORT}"
+  while $cl_run
+    begin
+      client = server.accept
+      if cl_handshake(client)
+        $cl_mutex.synchronize { $cl_clients << client }
+        respond "[combatlens] dashboard connected (#{$cl_clients.size} live)"
+        cl_broadcast_state
+      else
+        client.close rescue nil
+      end
+    rescue => e
+      respond "[combatlens] accept error: #{e.message}" if $cl_run
+    end
+  end
+  server.close rescue nil
+end
+
+def cl_state
+  ind = (XMLData.indicator rescue {}) || {}
+  {
+    t:          'state',
+    char:       (Char.name rescue (XMLData.name rescue 'You')),
+    health:     (XMLData.health rescue 0),
+    maxhealth:  (XMLData.max_health rescue 0),
+    mana:       (XMLData.mana rescue 0),
+    maxmana:    (XMLData.max_mana rescue 0),
+    stamina:    (XMLData.stamina rescue 0),
+    maxstamina: (XMLData.max_stamina rescue 0),
+    spirit:     (XMLData.spirit rescue 0),
+    maxspirit:  (XMLData.max_spirit rescue 0),
+    stance:     (XMLData.stance_text rescue ''),
+    rt:         ([0, ((XMLData.roundtime_end rescue 0) - Time.now.to_i)].max),
+    left:       (GameObj.left_hand.name rescue nil),
+    right:      (GameObj.right_hand.name rescue nil),
+    indicators: ind
+  }
+end
+
+$cl_last = nil
+def cl_broadcast_state
+  s = cl_state
+  key = s.reject { |k, _| k == :rt }.to_s
+  if key != $cl_last || s[:rt].to_i > 0
+    $cl_last = key
+    cl_broadcast(s)
+  end
+end
+
+before_dying do
+  $cl_run = false
+  $cl_mutex.synchronize { $cl_clients.each { |c| c.close rescue nil } }
+  respond '[combatlens] bridge stopped.'
+end
+
+Thread.new { cl_server_thread }
+Thread.new do
+  while $cl_run
+    begin
+      cl_broadcast_state unless $cl_clients.empty?
+    rescue => e
+      respond "[combatlens] state error: #{e.message}"
+    end
+    sleep 0.3
+  end
+end
+
+respond '[combatlens] running. Open the dashboard and click Live.'
+loop do
+  line = get
+  next if line.nil?
+  cl_broadcast(t: 'line', text: line) unless $cl_clients.empty?
+end

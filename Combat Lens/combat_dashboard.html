@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSIV Combat Lens</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#161a22; --panel2:#1d222c; --line:#2a313d;
+    --ink:#e6e9ef; --dim:#8b95a7; --accent:#c8102e; --gold:#e0b64c;
+    --hp:#d64550; --mana:#4f8bd6; --stam:#e6c84c; --spirit:#d7dbe0;
+    --good:#57c98a; --bad:#e0625f; --warn:#e6b34c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+  h1,h2,h3{margin:0;font-weight:600}
+  .app{display:grid;grid-template-columns:320px 1fr 360px;gap:12px;padding:12px;min-height:100vh}
+  .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .card h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  .topbar{grid-column:1/-1;display:flex;align-items:center;gap:12px;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:10px 14px;flex-wrap:wrap}
+  .topbar h1{font-size:16px;color:var(--gold);letter-spacing:.04em}
+  .topbar .tag{font-size:11px;color:var(--dim);border:1px solid var(--line);padding:2px 8px;border-radius:20px}
+  .spacer{flex:1}
+  button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;
+    padding:7px 12px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--gold)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.primary:hover{filter:brightness(1.1)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  input[type=file]{display:none}
+  label.file{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:7px 12px;cursor:pointer}
+  label.file:hover{border-color:var(--gold)}
+  select,input[type=text],input[type=password],input[type=number]{background:var(--bg);color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px}
+  /* vitals towers (vertical H/M/St/Sp bars, one column-group per person) */
+  .towers{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+  .towers::-webkit-scrollbar{height:7px}
+  .towers::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .tower{flex:0 0 68px;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .tower.self{background:rgba(224,182,76,.06);border:1px solid rgba(224,182,76,.25);border-radius:8px;padding:4px 0}
+  .bars{display:flex;gap:4px;align-items:flex-end;height:58px}
+  .tbar{position:relative;width:10px;height:58px;background:#242a34;border-radius:3px;overflow:hidden}
+  .tbar > i{position:absolute;left:0;right:0;bottom:0;border-radius:3px;transition:height .2s}
+  .tbar.unknown{opacity:.3;background:repeating-linear-gradient(45deg,#242a34,#242a34 3px,#1a1f27 3px,#1a1f27 6px)}
+  .tbar.wide{width:52px}
+  .blabels{display:flex;gap:4px}
+  .blabels span{width:10px;text-align:center;font-size:8px;color:var(--dim)}
+  .tname{font-size:11px;font-weight:600;max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tower.self .tname{color:var(--gold)}
+  .thp{font-size:10px;color:var(--dim)}
+  .ststat{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;min-height:15px;max-width:66px}
+  .stgood{font-size:10px;color:var(--good);min-height:15px;line-height:15px}
+  .stchip{font-size:8px;font-weight:700;letter-spacing:.03em;padding:1px 4px;border-radius:4px;
+    background:rgba(224,98,95,.18);color:#e0625f;border:1px solid rgba(224,98,95,.45)}
+  .stchip.warn{background:rgba(230,179,76,.16);color:#e6b34c;border-color:rgba(230,179,76,.45)}
+  .vlegend{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap}
+  .vlegend span{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dim)}
+  .vlegend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  /* posture figure + hands */
+  .figbox{display:flex;align-items:center;gap:14px}
+  .figure{flex:0 0 60px}
+  .fcap{font-size:14px;text-transform:capitalize;font-weight:600;margin-bottom:6px}
+  .hands{display:flex;flex-direction:column;gap:5px}
+  .hand{display:flex;align-items:center;gap:8px;font-size:12px;min-width:0}
+  .hand .hl{color:var(--dim);flex:0 0 40px;text-transform:uppercase;font-size:10px;letter-spacing:.05em}
+  .hand .hi{font-size:14px;flex:0 0 18px;text-align:center}
+  .hand .hv{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hand .hv.empty{color:var(--dim);font-style:italic}
+  /* status icons */
+  .iconrow{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:20px;padding:4px 10px;font-size:12px}
+  .chip.bad{border-color:var(--bad);color:var(--bad)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+  .dot.bad{background:var(--bad)}
+  /* enemies */
+  .enemy{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .enemy:last-child{border-bottom:none}
+  .enemy .est{font-size:11px;padding:1px 7px;border-radius:12px;border:1px solid var(--line);color:var(--dim)}
+  .enemy .est.stunned{color:var(--warn);border-color:var(--warn)}
+  .enemy .est.down{color:var(--bad);border-color:var(--bad)}
+  /* stats */
+  .stat{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
+  .stat .k{color:var(--dim)} .stat .v{font-weight:600}
+  .meter{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;margin:3px 0 8px}
+  .meter > i{display:block;height:100%}
+  /* synopsis / feed */
+  .synopsis{font-size:14px;line-height:1.5;min-height:44px}
+  .lastline{display:flex;gap:8px;font-size:13px;padding:4px 0}
+  .lastline .lbl{flex:0 0 68px;color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:.06em;padding-top:2px}
+  .out{color:var(--good)} .inc{color:var(--bad)}
+  .feed{height:190px;overflow:auto;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;
+    background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+  .feed div{padding:1px 0;border-bottom:1px solid rgba(255,255,255,.03);color:var(--dim)}
+  .feed .ev-out{color:var(--good)} .feed .ev-in{color:var(--bad)}
+  .feed .ev-kill{color:var(--gold)} .feed .ev-sys{color:var(--mana)}
+  /* suggestion */
+  .suggest{background:linear-gradient(180deg,rgba(200,16,46,.10),transparent);
+    border:1px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:14px;min-height:40px}
+  .suggest.calm{border-color:var(--line);background:var(--panel2)}
+  /* replay controls */
+  .replay{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .scrub{flex:1;min-width:160px}
+  input[type=range]{width:100%}
+  .muted{color:var(--dim);font-size:12px}
+  /* ai */
+  .airead{white-space:pre-wrap;font-size:13px;line-height:1.5;min-height:60px;color:var(--ink)}
+  .settings label{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer}
+  .settings .sub{margin-left:26px;color:var(--dim);font-size:12px}
+  .settings input[type=text],.settings input[type=password]{width:100%;margin-top:4px}
+  details summary{cursor:pointer;color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  .rt{font-size:11px;color:var(--warn)}
+  .badge{font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid var(--line);color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <h1>&#9876; GSIV Combat Lens</h1>
+    <span class="tag" id="modeTag">Replay mode</span>
+    <span class="tag" id="charTag">&mdash;</span>
+    <div class="spacer"></div>
+    <label class="file">&#128194; Load log<input type="file" id="fileIn" accept=".log,.txt,.xml"></label>
+    <button id="jumpBtn" title="Skip ambient chatter, jump to first combat">&#9197; First combat</button>
+    <button id="liveBtn" title="Connect to the Lich combatlens bridge">&#128268; Live</button>
+    <button id="resetBtn">&#8635; Reset</button>
+  </div>
+
+  <!-- LEFT: SELF + GROUP -->
+  <div class="col">
+    <div class="card">
+      <h3>Vitals &mdash; you &amp; group</h3>
+      <div class="towers" id="towers"></div>
+      <div class="vlegend">
+        <span><i style="background:var(--hp)"></i>Health</span>
+        <span><i style="background:var(--mana)"></i>Mana</span>
+        <span><i style="background:var(--stam)"></i>Stamina</span>
+        <span><i style="background:var(--spirit)"></i>Spirit</span>
+      </div>
+      <div class="muted" id="allyNote" style="margin-top:6px;display:none">Ally rings fill when vitals are shared over LNet (live mode). Status is inferred from combat text.</div>
+    </div>
+    <div class="card">
+      <h3>Posture &amp; Hands</h3>
+      <div class="figbox">
+        <div class="figure" id="figure"></div>
+        <div style="flex:1;min-width:0">
+          <div class="fcap" id="posCap">standing</div>
+          <div class="hands" id="handsRow"></div>
+          <div class="hand" style="margin-top:4px"><span class="hl">Stance</span><span id="stanceVal">&mdash;</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Status Effects</h3>
+      <div class="iconrow" id="statusRow"><span class="muted">none</span></div>
+    </div>
+  </div>
+
+  <!-- CENTER: COMBAT NARRATIVE -->
+  <div class="col">
+    <div class="card">
+      <h3>Combat Synopsis <span class="rt" id="rtTag"></span></h3>
+      <div class="synopsis" id="synopsis">Load a log and press play, or jump to the first combat.</div>
+      <div class="lastline"><span class="lbl">Last out</span><span id="lastOut" class="out">&mdash;</span></div>
+      <div class="lastline"><span class="lbl">Last in</span><span id="lastIn" class="inc">&mdash;</span></div>
+    </div>
+    <div class="card">
+      <h3>Suggestion <span class="badge">heuristic &middot; free</span></h3>
+      <div class="suggest calm" id="suggest">Standing by.</div>
+    </div>
+    <div class="card">
+      <h3>AI Tactician (live) <span class="badge" id="contStatus">off</span></h3>
+      <div class="airead" id="liveAi"><span class="muted">Continuous read appears here during combat.</span></div>
+    </div>
+    <div class="card">
+      <h3>Enemies engaged</h3>
+      <div id="enemyList"><span class="muted">none</span></div>
+    </div>
+    <div class="card">
+      <h3>Live Feed</h3>
+      <div class="feed" id="feed"></div>
+    </div>
+    <div class="card">
+      <h3>Replay</h3>
+      <div class="replay">
+        <button id="playBtn" class="primary">&#9654; Play</button>
+        <select id="speedSel">
+          <option value="1">1&times;</option>
+          <option value="2" selected>2&times;</option>
+          <option value="4">4&times;</option>
+          <option value="8">8&times;</option>
+          <option value="30">30&times;</option>
+          <option value="0">Instant</option>
+        </select>
+        <div class="scrub"><input type="range" id="scrub" min="0" max="100" value="0"></div>
+        <span class="muted" id="progLbl">0 / 0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: EFFECTIVENESS + AI -->
+  <div class="col">
+    <div class="card">
+      <h3>Offense</h3>
+      <div id="offStats"></div>
+    </div>
+    <div class="card">
+      <h3>Defense</h3>
+      <div id="defStats"></div>
+    </div>
+    <div class="card">
+      <h3>AI Read (on-demand &middot; premium)</h3>
+      <button id="aiBtn" class="primary" style="width:100%;margin-bottom:8px">&#129504; Give me your read</button>
+      <div class="airead" id="aiRead"><span class="muted">Deep read from a premium online model &mdash; press anytime.</span></div>
+      <details style="margin-top:10px" class="settings">
+        <summary>AI settings</summary>
+        <div style="margin-top:8px">
+          <div class="sub">Claude API key (this tab only) &mdash; powers the button + online continuous mode</div>
+          <input type="password" id="apiKey" placeholder="sk-ant-...">
+
+          <div class="sub" style="margin-top:12px;color:var(--gold)">On-demand button model (premium)</div>
+          <input type="text" id="premiumModel" value="claude-sonnet-5">
+          <div class="sub">e.g. claude-sonnet-5, or claude-opus-4-8 for the heaviest.</div>
+
+          <label style="margin-top:14px"><input type="checkbox" id="contToggle" checked> Continuous AI tactician</label>
+          <div class="sub">Analyzes the fight on a timer; pauses when no combat is active.</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <span class="sub" style="margin:0">Every</span>
+            <input type="number" id="contInterval" value="15" min="5" max="120" style="width:64px">
+            <span class="sub" style="margin:0">seconds</span>
+          </div>
+
+          <label style="margin-top:12px"><input type="checkbox" id="localToggle"> Run continuous on Local LLM (Ollama) &mdash; free &amp; private</label>
+          <div id="ollamaCfg" style="display:none">
+            <div class="sub">Ollama URL</div>
+            <input type="text" id="ollamaUrl" value="http://localhost:11434">
+            <div class="sub" style="margin-top:6px">Ollama model</div>
+            <input type="text" id="ollamaModel" value="llama3.1">
+          </div>
+          <div id="contOnlineCfg">
+            <div class="sub" style="margin-top:6px">Online continuous model (fast/cheap)</div>
+            <input type="text" id="contModel" value="claude-haiku-4-5-20251001">
+          </div>
+        </div>
+      </details>
+    </div>
+    <div class="card">
+      <h3>Session tallies</h3>
+      <div id="sessStats"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   GSIV Combat Lens  —  prototype (log-replay + live bridge)
+   Parses the cleaned Lich text stream (and, in live mode, the
+   richer XML via the combatlens.lic bridge) into one state model.
+   ============================================================ */
+
+const $ = id => document.getElementById(id);
+
+/* ---------- STATE ---------- */
+function freshState(){
+  return {
+    vitals:{health:[270,270],mana:[100,100],stamina:[100,100],spirit:[10,10]},
+    stance:'—', position:'standing',
+    hands:{left:'',right:''}, everWielded:false,
+    status:new Set(), roundtime:0,
+    group:[],      // {name, leader, hp, status:Set}
+    enemies:{},    // name -> {status:'engaged'|'stunned'|'down', token}
+    lastOut:'—', lastIn:'—', synopsis:'',
+    off:{swings:0,hits:0,dmg:0,ward:0,wardOk:0,crits:0},
+    def:{attacks:0,avoided:0,hits:0,dmg:0},
+    kills:0,
+    recent:[], feed:[],
+    pendingDir:null, pendingAttacker:null,
+    charName:'—', lastCombatTs:0,
+    _pendAS:null, _pendCS:null
+  };
+}
+let S = freshState();
+
+/* ---------- PARSER ---------- */
+const RE = {
+  vitals:/^Health:\s*(\d+)\/(\d+)\s+Mana:\s*(\d+)\/(\d+)\s+Stamina:\s*(\d+)\/(\d+)\s+Spirit:\s*(\d+)\/(\d+)/,
+  as:/AS:\s*([+\-]?\d+)\s+vs DS:\s*([+\-]?\d+)\s+with AvD:\s*([+\-]?\d+)\s*\+\s*d100 roll:\s*([+\-]?\d+)\s*=\s*([+\-]?\d+)/,
+  cs:/CS:\s*([+\-]?\d+)\s*-\s*TD:\s*([+\-]?\d+)\s*\+\s*CvA:\s*([+\-]?\d+)\s*\+\s*d100:\s*([+\-]?\d+)\s*==\s*([+\-]?\d+)/,
+  smr:/\[SMR result:\s*(\d+)\s*\(Open d100:\s*(\d+)/,
+  dmgTick:/^\s*\.\.\.\s*(?:and hit for )?(\d+) points? of damage/i,
+  target:/You are now targeting (?:an?|the) (.+?)\./,
+  stance:/You are now in an? (\w+) stance/i,
+  group:/^You are grouped with (.+?)\.\s*$/,
+  joins:/^(\w+) joins your group\./,
+  leaves:/^(\w+) leaves your group\./,
+  cmd:/^\[[^\]]+\]>/,
+  rt:/Roundtime:\s*(\d+) sec/i,
+  castRt:/Cast Roundtime (\d+) Second/i,
+};
+const DEATH = [
+  /collapses to the ground, dead/, /goes still/, /last hint of life goes out/,
+  /sinks to the ground as its form goes still/, /body collapses in upon itself/,
+  /falls (?:limp|motionless|to the ground and lies still)/, /crumples to the ground/,
+  /is slain/, /lies dead/, /crumbles to (?:dust|ash)/, /dissolves into/
+];
+const OUT_VERB = /^(You|Your)\b.*\b(gesture|swing|thrust|lunge|launch|snap|hurl|fire|lob|throw|slice|jab|sweep|bash|punch|kick|incant|cast|point|slash|strike|attack|whirl|shoot|release|loose)/i;
+const IN_MARK = /(at you[!.]|ravage you|assails? you|swings at you|lunges at you|slices at you|claws at you|bites? (?:at )?you|strikes? at you|charge(?:s)? at you|hurls?.*at you|barrels into a merciless charge at you)/i;
+const DEF_OK = /(you (?:manage to |barely manage to |skillfully |deftly )?(?:block|parry|evade|dodge|interpose|deflect)|manage to (?:block|dodge|evade)|you avoid the|manages? to miss you|Amazingly, you manage to block)/i;
+
+/* item classification (hands) */
+const SHIELD_RE=/shield|buckler|targe|aegis/i;
+const WEAPON_RE=/spear|sword|axe|mace|blade|maul|flail|hammer|halberd|polearm|runestaff|runestave|\bstaff\b|\bstave\b|falchion|dagger|whip|\bbow\b|crossbow|katar|club|scimitar|rapier|glaive|pike|lance|scythe|trident|cleaver|claymore|katana|naginata|cestus|knuckle|fist|greatsword|bastard|broadsword|longsword|shortsword|war ?hammer|quarterstaff|morning ?star|handaxe|hatchet|sai|nunchaku|tulwar|jeddart|voulge|ranseur|partisan|bardiche|fork/i;
+function classifyItem(name){ if(!name) return 'empty'; if(SHIELD_RE.test(name)) return 'shield'; if(WEAPON_RE.test(name)) return 'weapon'; return 'other'; }
+function lastTok(name){ return (name||'').toLowerCase().replace(/[.,!'’]+$/,'').trim().split(/\s+/).pop(); }
+function handIcon(cls){ return cls==='weapon'?'⚔':cls==='shield'?'🛡':cls==='other'?'✋':'·'; }
+function shortHand(name){ if(!name) return ''; return name.split(/\s+/).slice(-2).join(' '); }
+function hasWeapon(){ return classifyItem(S.hands.left)==='weapon'||classifyItem(S.hands.right)==='weapon'; }
+function hasShield(){ return classifyItem(S.hands.left)==='shield'||classifyItem(S.hands.right)==='shield'; }
+function handsEmpty(){ return !S.hands.left && !S.hands.right; }
+
+/* enemy tracking by loose token (last word) */
+function enemyToken(name){ const w=name.toLowerCase().replace(/[.,!'’]+$/,'').trim().split(/\s+/); return w[w.length-1]; }
+function addEnemy(name){ name=(name||'').replace(/[.,!]+$/,'').trim(); if(name && !S.enemies[name]) S.enemies[name]={status:'engaged',token:enemyToken(name)}; }
+function matchEnemy(l){ const low=l.toLowerCase(); for(const nm in S.enemies){ const t=S.enemies[nm].token; if(t && low.includes(t)) return nm; } return null; }
+
+function pushFeed(cls,txt){
+  S.feed.push({cls,txt});
+  if(S.feed.length>400) S.feed.shift();
+  if(cls==='ev-out'||cls==='ev-in'||cls==='ev-kill') S.lastCombatTs=Date.now();
+}
+function pushRecent(txt){ S.recent.push(txt); if(S.recent.length>24) S.recent.shift(); }
+function firstWord(l){ const m=l.match(/^(?:an?|the)?\s*([A-Za-z][\w'-]+)/); return m?m[1]:'enemy'; }
+function addStatus(s){ S.status.add(s); }
+function shorten(l){ l=l.replace(/^\s+/,''); return l.length>90? l.slice(0,88)+'…' : l; }
+
+function parseLine(raw){
+  const l = (raw||'').replace(/\r$/,'');
+  if(!l.trim()) return;
+  let m;
+
+  if((m=l.match(RE.vitals))){
+    S.vitals.health=[+m[1],+m[2]]; S.vitals.mana=[+m[3],+m[4]];
+    S.vitals.stamina=[+m[5],+m[6]]; S.vitals.spirit=[+m[7],+m[8]];
+    return;
+  }
+  if((m=l.match(RE.group))){
+    S.group=[]; let g=m[1];
+    g.split(/,|\band\b/).forEach(part=>{
+      let name=part.replace(/who is leading/,'').trim();
+      let leader=/leading/.test(part);
+      if(name) S.group.push({name,leader,hp:null,status:new Set()});
+    });
+    let lead=m[1].match(/(\w+) who is leading/);
+    if(lead) S.group.forEach(x=>x.leader=(x.name===lead[1]));
+    pushFeed('ev-sys','Group: '+S.group.map(x=>x.name+(x.leader?' (lead)':'')).join(', '));
+    return;
+  }
+  if((m=l.match(RE.joins))){ if(!S.group.some(x=>x.name===m[1])) S.group.push({name:m[1],leader:false,hp:null,status:new Set()}); pushFeed('ev-sys',m[1]+' joined the group'); return; }
+  if((m=l.match(RE.leaves))){ S.group=S.group.filter(x=>x.name!==m[1]); pushFeed('ev-sys',m[1]+' left the group'); return; }
+
+  if((m=l.match(RE.stance))){ S.stance=m[1]; return; }
+  if((m=l.match(RE.rt))){ S.roundtime=+m[1]; return; }
+  if((m=l.match(RE.castRt))){ S.roundtime=+m[1]; return; }
+  if((m=l.match(RE.target))){ addEnemy(m[1]); return; }
+
+  if(/^You kneel down/.test(l)){ S.position='kneeling'; return; }
+  if(/^You sit down|^You are sitting/.test(l)){ S.position='sitting'; return; }
+  if(/^You stand(?: back up)?\.?$/.test(l)||/You rise to your feet/.test(l)){ S.position='standing'; return; }
+  if(/You are knocked to the ground|You fall to the ground|You fall flat on the ground|You are thrown to the ground/.test(l)){ S.position='prone'; return; }
+
+  if((m=l.match(/^You (?:remove|get) (.+?) from (?:in )?your /))){
+    const item=m[1], cls=classifyItem(item);
+    if(cls==='shield') S.hands.left=item; else S.hands.right=item;
+    if(cls==='weapon') S.everWielded=true;
+    return;
+  }
+  if((m=l.match(/^You (?:put|stow|sheathe) (.+?) (?:in|into) /))){
+    const item=m[1], tok=lastTok(item);
+    if(lastTok(S.hands.left)===tok) S.hands.left='';
+    else if(lastTok(S.hands.right)===tok) S.hands.right='';
+    else S.hands.right='';
+    return;
+  }
+
+  if(/^You are stunned|The world spins|You are still stunned/.test(l)){ addStatus('stunned'); return; }
+  if(/You are no longer stunned|You shake off the stun|snap out of the stun/.test(l)){ S.status.delete('stunned'); return; }
+  if(/You are (?:now )?(?:stuck|webbed|entangled)/.test(l)){ addStatus('webbed'); return; }
+  if(/You begin to bleed|blood (?:wells|seeps|pours)/i.test(l)){ addStatus('bleeding'); return; }
+
+  /* direction markers */
+  if(RE.cmd.test(l) && OUT_VERB.test(l.replace(RE.cmd,''))){ S.pendingDir='out'; }
+  if(OUT_VERB.test(l)){
+    S.pendingDir='out';
+    const at=l.match(/\bat (?:an?|the) ([a-z][\w' -]+?)[.!]/);
+    if(at) addEnemy(at[1]);
+  }
+  if(IN_MARK.test(l)){ S.pendingDir='in'; S.pendingAttacker=firstWord(l); }
+
+  if(DEF_OK.test(l)){
+    S.def.attacks++; S.def.avoided++;
+    S.lastIn='Avoided: '+shorten(l);
+    pushFeed('ev-in','DEF ✓ '+shorten(l));
+    pushRecent('DEF avoided: '+shorten(l));
+    S.pendingDir=null; return;
+  }
+
+  if((m=l.match(RE.cs))){ S.pendingDir=S.pendingDir||'out'; S._pendCS={margin:+m[5],dir:S.pendingDir}; return; }
+  if(/^\s*Warding failed!/.test(l) && S._pendCS){
+    if(S._pendCS.dir==='out'){ S.off.ward++; S.off.wardOk++; S.lastOut='Spell landed (margin '+S._pendCS.margin+')'; pushFeed('ev-out','SPELL ✓ warding failed, margin '+S._pendCS.margin); pushRecent('SPELL landed margin '+S._pendCS.margin); }
+    S._pendCS=null; return;
+  }
+  if(/Warded off!|is buffeted|resists the/i.test(l) && S._pendCS){
+    if(S._pendCS.dir==='out'){ S.off.ward++; S.lastOut='Spell warded off'; pushFeed('ev-out','SPELL ✗ warded'); pushRecent('SPELL warded'); }
+    S._pendCS=null; return;
+  }
+
+  /* ** proc line (mentions "your" or names a tracked enemy) = my effect landing → outgoing */
+  if(/^\s*\*\*/.test(l) && (/\byour\b/i.test(l) || matchEnemy(l))){ S.pendingDir='out'; }
+
+  if((m=l.match(RE.as))){
+    const dir=S.pendingDir||'out', total=+m[5];
+    S._pendAS={dir,total};
+    if(dir==='out') S.off.swings++; else S.def.attacks++;
+    return;
+  }
+  if((m=l.match(/and (hits?) for (\d+) points? of damage/i))){
+    const incoming=/hits/i.test(m[1]); const dmg=+m[2];
+    if(incoming){
+      if(S._pendAS&&S._pendAS.dir!=='in') S.def.attacks++;
+      S.def.hits++; S.def.dmg+=dmg;
+      S.lastIn=dmg+' dmg taken'+(S.pendingAttacker?' from '+S.pendingAttacker:'');
+      pushFeed('ev-in','TAKEN '+dmg+' dmg'); pushRecent('TOOK '+dmg+' dmg'+(S.pendingAttacker?' from '+S.pendingAttacker:''));
+    } else {
+      S.off.hits++; S.off.dmg+=dmg;
+      S.lastOut=dmg+' dmg'+(S._pendAS?' (AS '+(S._pendAS.total>=0?'+':'')+S._pendAS.total+')':'');
+      pushFeed('ev-out','HIT '+dmg+' dmg'); pushRecent('HIT '+dmg+' dmg');
+    }
+    S._pendAS=null; return;
+  }
+  if((m=l.match(RE.dmgTick))){
+    const dmg=+m[1];
+    const dir = S._pendCS? S._pendCS.dir : (S.pendingDir||'out');
+    if(dir==='in'){ S.def.dmg+=dmg; S.lastIn=dmg+' dmg taken'; pushFeed('ev-in','TAKEN '+dmg+' dmg'); }
+    else { S.off.dmg+=dmg; S.lastOut=dmg+' dmg'; pushFeed('ev-out','+'+dmg+' dmg'); }
+    return;
+  }
+  if(/(shatters|severs|punctures|pierces|Impressive|Beautiful|Amazing|shrivels|Well aimed|explodes|decapitat)/.test(l) && (S._pendAS||S._pendCS)){
+    S.off.crits++; return;
+  }
+
+  /* group member status inferred from text (allies' exact HP isn't broadcast, but these are visible) */
+  if(S.group.length){
+    const gm=l.match(/^([A-Z][a-z]+)\b/);
+    const g=gm && S.group.find(x=>x.name===gm[1]);
+    if(g){
+      if(/\bis stunned|looks stunned|reels? .*stunned/.test(l)){ g.status.add('stunned'); return; }
+      if(/knocked to the ground|falls to the ground|is thrown to the ground|slumps to the ground|is knocked from/.test(l)){ g.status.add('prone'); return; }
+      if(/stands? back up|rises to (?:his|her|their) feet|scrambles to (?:his|her|their) feet|regains? (?:his|her|their) footing/.test(l)){ g.status.delete('prone'); return; }
+      if(/is no longer stunned|shakes off the stun|snaps out of/.test(l)){ g.status.delete('stunned'); return; }
+      if(/is (?:stuck|webbed|ensnared|entangled)|becomes ensnared/.test(l)){ g.status.add('webbed'); return; }
+      if(/breaks? free|tears? free of the web|is no longer (?:stuck|webbed)/.test(l)){ g.status.delete('webbed'); return; }
+      if(/begins? to bleed|is bleeding|blood (?:wells|pours|seeps) from/.test(l)){ g.status.add('bleeding'); return; }
+      if(/a calm washes over|is calmed/.test(l)){ g.status.add('calmed'); return; }
+      if(/falls (?:to the ground )?(?:motionless|and lies still)|goes limp|has been slain|crumples to the ground, dead|is dead/.test(l)){ g.status.add('dead'); return; }
+    }
+  }
+
+  if(/ is stunned[.!]/.test(l) && !/^You/.test(l)){
+    const nm=matchEnemy(l); if(nm){ S.enemies[nm].status='stunned'; }
+    pushFeed('ev-out','Enemy stunned'); pushRecent('enemy stunned'); return;
+  }
+  if(/is knocked to the ground|knocked from its feet|It is knocked to the ground/.test(l) && !/^You/.test(l)){
+    const nm=matchEnemy(l); if(nm){ S.enemies[nm].status='down'; }
+    pushFeed('ev-out','Enemy knocked down'); pushRecent('enemy knocked down'); return;
+  }
+  for(const d of DEATH){
+    if(d.test(l) && !/^You/.test(l) && !/fire dies down/.test(l)){
+      S.kills++;
+      const nm=matchEnemy(l);
+      if(nm) delete S.enemies[nm];
+      S.lastOut='KILL — '+shorten(l);
+      pushFeed('ev-kill','KILL ☠ '+shorten(l));
+      pushRecent('KILLED '+(nm||'enemy'));
+      return;
+    }
+  }
+}
+
+/* ---------- RENDER ---------- */
+function escapeHtml(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+function miniStatus(set){
+  if(!set||set.size===0) return `<div class="stgood">✓</div>`;
+  const ic={stunned:'STN',prone:'PRN',webbed:'WEB',bleeding:'BLD',calmed:'CLM',diseased:'DIS',poisoned:'PSN',dead:'DED'};
+  const warn=new Set(['prone','webbed','calmed','diseased']);
+  return `<div class="ststat">`+[...set].map(s=>
+    `<span class="stchip ${warn.has(s)?'warn':''}">${ic[s]||s.slice(0,3).toUpperCase()}</span>`).join('')+`</div>`;
+}
+function towerCell(person){
+  const v=person.v, pf=a=>a===null?null:(a&&a[1]?Math.max(0,Math.min(100,Math.round(100*a[0]/a[1]))):0);
+  const bar=(val,color)=> val==null
+    ? `<div class="tbar unknown"></div>`
+    : `<div class="tbar"><i style="height:${val}%;background:${color}"></i></div>`;
+  const hp=pf(v.health);
+  let bars, labels;
+  if(person.self){
+    bars=bar(pf(v.health),'var(--hp)')+bar(pf(v.mana),'var(--mana)')+bar(pf(v.stamina),'var(--stam)')+bar(pf(v.spirit),'var(--spirit)');
+    labels=`<div class="blabels"><span>H</span><span>M</span><span>St</span><span>Sp</span></div>`;
+  }else{
+    bars = hp==null ? `<div class="tbar wide unknown"></div>`
+      : `<div class="tbar wide"><i style="height:${hp}%;background:var(--hp)"></i></div>`;
+    labels=`<div class="blabels"><span style="width:auto">HP</span></div>`;
+  }
+  return `<div class="tower ${person.self?'self':''}">
+    <div class="bars">${bars}</div>
+    ${labels}
+    ${miniStatus(person.status)}
+    <div class="tname">${escapeHtml(person.name)}</div>
+    <div class="thp">${hp==null?'—':hp+'% HP'}</div>
+  </div>`;
+}
+function figureSVG(pos){
+  const col=pos==='prone'?'var(--bad)':pos==='standing'?'var(--gold)':'var(--warn)';
+  let body;
+  if(pos==='standing'){
+    body=`<circle cx="60" cy="20" r="16"/>`
+      +`<rect x="44" y="36" width="32" height="56" rx="16"/>`
+      +`<rect x="31" y="42" width="12" height="52" rx="6"/><rect x="77" y="42" width="12" height="52" rx="6"/>`
+      +`<rect x="47" y="88" width="13" height="58" rx="6.5"/><rect x="60" y="88" width="13" height="58" rx="6.5"/>`;
+  }else if(pos==='kneeling'){
+    body=`<circle cx="58" cy="30" r="15"/>`
+      +`<rect x="44" y="44" width="28" height="44" rx="14"/>`
+      +`<rect x="43" y="50" width="11" height="36" rx="5.5"/><rect x="62" y="50" width="11" height="36" rx="5.5"/>`
+      +`<rect x="36" y="86" width="54" height="18" rx="9"/>`
+      +`<rect x="74" y="90" width="24" height="13" rx="6.5"/>`;
+  }else if(pos==='sitting'){
+    body=`<circle cx="44" cy="44" r="15"/>`
+      +`<g transform="rotate(-20 60 74)"><rect x="48" y="52" width="26" height="42" rx="13"/></g>`
+      +`<rect x="29" y="66" width="11" height="44" rx="5.5"/>`
+      +`<rect x="44" y="96" width="22" height="15" rx="7.5"/>`
+      +`<g transform="rotate(-10 72 100)"><rect x="60" y="92" width="44" height="15" rx="7.5"/></g>`
+      +`<rect x="92" y="94" width="14" height="26" rx="7"/>`;
+  }else{
+    body=`<circle cx="100" cy="90" r="15"/>`
+      +`<g transform="rotate(14 76 100)"><rect x="56" y="90" width="42" height="16" rx="8"/></g>`
+      +`<rect x="86" y="98" width="11" height="28" rx="5.5"/>`
+      +`<rect x="16" y="112" width="58" height="15" rx="7.5"/>`
+      +`<g transform="rotate(38 60 112)"><rect x="53" y="86" width="14" height="32" rx="7"/></g>`;
+  }
+  return `<svg width="60" height="76" viewBox="0 0 120 150" fill="${col}">${body}</svg>`;
+}
+function statBar(k,v,pct,color){
+  return `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span></div>
+    <div class="meter"><i style="width:${Math.max(0,Math.min(100,pct))}%;background:${color}"></i></div>`;
+}
+function pct(v){return v[1]?Math.round(100*v[0]/v[1]):0;}
+
+function render(){
+  const myName=(S.charName&&S.charName!=='—')?S.charName:'You';
+  const selfWheel={name:myName, self:true, v:S.vitals, status:S.status};
+  const allyWheels=S.group.filter(g=>g.name!==myName).map(g=>({
+    name:g.name, self:false, status:g.status,
+    v:{health:(g.hp!=null?[g.hp,100]:null)}
+  }));
+  $('towers').innerHTML=[selfWheel,...allyWheels].map(towerCell).join('');
+  $('allyNote').style.display = allyWheels.length? 'block':'none';
+
+  $('figure').innerHTML=figureSVG(S.position);
+  $('posCap').textContent=S.position;
+  const lc=classifyItem(S.hands.left), rc=classifyItem(S.hands.right);
+  $('handsRow').innerHTML=
+    `<div class="hand"><span class="hl">Right</span><span class="hi">${handIcon(rc)}</span><span class="hv ${rc==='empty'?'empty':''}">${rc==='empty'?'empty':escapeHtml(shortHand(S.hands.right))}</span></div>`+
+    `<div class="hand"><span class="hl">Left</span><span class="hi">${handIcon(lc)}</span><span class="hv ${lc==='empty'?'empty':''}">${lc==='empty'?'empty':escapeHtml(shortHand(S.hands.left))}</span></div>`;
+  $('stanceVal').textContent=S.stance;
+
+  const sr=$('statusRow');
+  if(S.status.size===0) sr.innerHTML='<span class="muted">none</span>';
+  else sr.innerHTML=[...S.status].map(s=>`<span class="chip bad"><span class="dot bad"></span>${s}</span>`).join('');
+  $('rtTag').textContent = S.roundtime>0? ('RT '+S.roundtime+'s') : '';
+
+  const el=$('enemyList'), ens=Object.keys(S.enemies);
+  if(ens.length===0) el.innerHTML='<span class="muted">none</span>';
+  else el.innerHTML=ens.map(nm=>{
+    const st=S.enemies[nm].status||'engaged';
+    return `<div class="enemy"><span style="flex:1">${escapeHtml(nm)}</span><span class="est ${st}">${st}</span></div>`;
+  }).join('');
+
+  $('synopsis').textContent = S.synopsis || buildSynopsis();
+  $('lastOut').textContent = S.lastOut;
+  $('lastIn').textContent = S.lastIn;
+
+  const o=S.off, hitRate=o.swings?Math.round(100*o.hits/o.swings):0, wardRate=o.ward?Math.round(100*o.wardOk/o.ward):0;
+  $('offStats').innerHTML =
+    statBar('Weapon hit rate',hitRate+'%  ('+o.hits+'/'+o.swings+')',hitRate,'var(--good)')+
+    statBar('Spell warding',wardRate+'%  ('+o.wardOk+'/'+o.ward+')',wardRate,'var(--mana)')+
+    `<div class="stat"><span class="k">Total damage dealt</span><span class="v">${o.dmg}</span></div>`+
+    `<div class="stat"><span class="k">Notable wounds</span><span class="v">${o.crits}</span></div>`+
+    `<div class="stat"><span class="k">Kills</span><span class="v">${S.kills}</span></div>`;
+  const d=S.def, avoidRate=d.attacks?Math.round(100*d.avoided/d.attacks):0;
+  $('defStats').innerHTML =
+    statBar('Attacks avoided',avoidRate+'%  ('+d.avoided+'/'+d.attacks+')',avoidRate,'var(--stam)')+
+    `<div class="stat"><span class="k">Hits taken</span><span class="v">${d.hits}</span></div>`+
+    `<div class="stat"><span class="k">Damage taken</span><span class="v">${d.dmg}</span></div>`;
+  $('sessStats').innerHTML =
+    `<div class="stat"><span class="k">Lines processed</span><span class="v">${cursor}</span></div>`+
+    `<div class="stat"><span class="k">Enemies down</span><span class="v">${S.kills}</span></div>`+
+    `<div class="stat"><span class="k">Net dmg (out-in)</span><span class="v">${S.off.dmg-S.def.dmg}</span></div>`;
+
+  renderSuggestion();
+  const f=$('feed');
+  f.innerHTML=S.feed.slice(-120).map(x=>`<div class="${x.cls||''}">${escapeHtml(x.txt)}</div>`).join('');
+  f.scrollTop=f.scrollHeight;
+  $('charTag').textContent=S.charName;
+}
+function buildSynopsis(){
+  if(cursor===0 && !ws) return 'Load a log and press play, or jump to the first combat.';
+  const hp=pct(S.vitals.health), ens=Object.keys(S.enemies).length;
+  let parts=['HP '+hp+'%'];
+  if(ens>0) parts.push(ens+' enem'+(ens>1?'ies':'y')+' engaged');
+  if(S.roundtime>0) parts.push('RT '+S.roundtime+'s');
+  const stunned=Object.values(S.enemies).filter(e=>e.status==='stunned'||e.status==='down').length;
+  if(stunned) parts.push(stunned+' incapacitated');
+  return parts.join(' · ');
+}
+
+/* ---------- HEURISTIC SUGGESTIONS (always on, zero-cost) ---------- */
+function renderSuggestion(){
+  const s=$('suggest'); const hp=pct(S.vitals.health), mp=pct(S.vitals.mana), spm=pct(S.vitals.stamina);
+  const ens=Object.values(S.enemies), nEn=ens.length,
+    incap=ens.filter(e=>e.status==='stunned'||e.status==='down').length;
+  let msg=null, urgent=false;
+  if(hp<=25){ msg='⚠ HP critical ('+hp+'%). Disengage, retreat, or trigger emergency healing NOW.'; urgent=true; }
+  else if(hp<=45){ msg='HP low ('+hp+'%). Consider a defensive stance or healing before pressing.'; urgent=true; }
+  else if(S.status.has('stunned')){ msg='You are stunned — can\'t act. Allies should peel the threat off you.'; urgent=true; }
+  else if(S.position==='prone'){ msg='You are prone. Stand before attacking to avoid the position penalty.'; urgent=true; }
+  else if(handsEmpty() && S.everWielded && nEn>0){ msg='Hands empty mid-fight — ready your weapon.'; urgent=true; }
+  else if(incap>0){ msg='✓ '+incap+' enemy incapacitated — press the advantage on the stunned/downed target.'; }
+  else if(nEn>=3){ msg='Swarmed by '+nEn+' enemies. Favor AoE / sweeps and keep your shield up.'; }
+  else if(mp<=15 && nEn>0){ msg='Mana low ('+mp+'%). Shift to weapon attacks / maneuvers to conserve.'; }
+  else if(spm<=15 && nEn>0){ msg='Stamina low ('+spm+'%). Ease off stamina-cost maneuvers.'; }
+  else if(nEn>0){ msg='Fight in hand: '+nEn+' engaged. Offense looking '+offTrend()+'.'; }
+  else { msg='Standing by.'; }
+  s.textContent=msg;
+  s.className='suggest'+(urgent?'':' calm');
+}
+function offTrend(){ const o=S.off; if(!o.swings) return 'unmeasured'; const r=o.hits/o.swings; return r>0.7?'strong':r>0.45?'steady':'shaky'; }
+
+/* ---------- REPLAY ENGINE ---------- */
+let lines=[], cursor=0, playing=false, timer=null;
+function loadText(txt){
+  reset();
+  // strip XML tags/prompts if an .xml log was loaded, keep the readable text
+  lines = txt.split(/\n/).map(x=>x.replace(/<[^>]+>/g,'').replace(/^\d\d:\d\d:\d\d:\s?/,'').trimEnd());
+  $('progLbl').textContent = '0 / '+lines.length;
+  $('scrub').max = lines.length;
+  S.charName = 'Kyrandos';
+  render();
+}
+function step(n=1){
+  for(let i=0;i<n && cursor<lines.length;i++){ parseLine(lines[cursor]); cursor++; }
+  $('scrub').value=cursor;
+  $('progLbl').textContent = cursor+' / '+lines.length;
+  render();
+}
+function play(){
+  if(cursor>=lines.length) return;
+  playing=true; $('playBtn').textContent='⏸ Pause';
+  const speed=+$('speedSel').value;
+  if(speed===0){ step(lines.length-cursor); pause(); return; }
+  clearInterval(timer);
+  const per=Math.max(1, Math.round(speed*3));
+  timer=setInterval(()=>{ if(cursor>=lines.length){ pause(); return; } step(per); }, 90);
+}
+function pause(){ playing=false; clearInterval(timer); $('playBtn').textContent='▶ Play'; }
+function reset(){ pause(); S=freshState(); cursor=0; $('scrub').value=0; render(); }
+function jumpToCombat(){
+  while(cursor<lines.length){
+    const l=lines[cursor];
+    if(RE.as.test(l)||RE.cs.test(l)||RE.smr.test(l)||/You gesture at|You are now targeting/.test(l)) break;
+    parseLine(l); cursor++;
+  }
+  step(60);
+}
+
+/* ---------- AI READ ---------- */
+function buildPayload(){
+  return {
+    self:{ hp:pct(S.vitals.health), mana:pct(S.vitals.mana), stamina:pct(S.vitals.stamina),
+      spirit:pct(S.vitals.spirit), stance:S.stance, position:S.position,
+      rightHand:S.hands.right||'empty', leftHand:S.hands.left||'empty',
+      weaponReady:hasWeapon(), shieldReady:hasShield(), status:[...S.status] },
+    enemies:Object.entries(S.enemies).map(([n,e])=>({name:n,status:e.status||'engaged'})),
+    group:S.group.map(g=>g.name+(g.leader?'(lead)':'')),
+    offense:{hitRate:S.off.swings?Math.round(100*S.off.hits/S.off.swings):null,
+      dmgDealt:S.off.dmg, kills:S.kills, wardWins:S.off.wardOk, wardTries:S.off.ward},
+    defense:{avoided:S.def.avoided, hitsTaken:S.def.hits, dmgTaken:S.def.dmg},
+    recentEvents:S.recent.slice(-20)
+  };
+}
+const SYS = "You are a GemStone IV combat tactician. Given a compact JSON snapshot of a live group fight, give a terse, high-signal read in 2-4 short sentences: the single most important thing to do right now, plus one note on offense and one on defense/risk. No preamble. Speak directly to the player.";
+
+async function aiRead(){
+  const btn=$('aiBtn'), out=$('aiRead');
+  btn.disabled=true; out.textContent='Thinking…';
+  try{ out.textContent=(await callClaude(JSON.stringify(buildPayload()), $('premiumModel').value, 500)).trim(); }
+  catch(e){ out.textContent='⚠ '+e.message; }
+  finally{ btn.disabled=false; }
+}
+async function callOllama(payload, model, baseUrl){
+  const url=(baseUrl||'http://localhost:11434').replace(/\/$/,'')+'/api/generate';
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:model||'llama3.1',prompt:SYS+"\n\nSNAPSHOT:\n"+payload+"\n\nYour read:",stream:false})});
+  if(!r.ok) throw new Error('Ollama '+r.status+' — is it running? (ollama serve)');
+  const j=await r.json(); return j.response||'(no response)';
+}
+async function callClaude(payload, model, maxTok){
+  const key=$('apiKey').value.trim();
+  if(!key) throw new Error('Add your Claude API key in AI settings.');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:model||'claude-haiku-4-5-20251001',max_tokens:maxTok||350,system:SYS,
+      messages:[{role:'user',content:'SNAPSHOT:\n'+payload}]})});
+  if(!r.ok){ const t=await r.text(); throw new Error('Claude API '+r.status+' '+t.slice(0,140)); }
+  const j=await r.json(); return (j.content&&j.content[0]&&j.content[0].text)||'(no response)';
+}
+
+/* ---------- CONTINUOUS AI TACTICIAN ---------- */
+let contTimer=null, contInFlight=false;
+function combatActive(){ return Object.keys(S.enemies).length>0 || (S.lastCombatTs && (Date.now()-S.lastCombatTs)<45000); }
+async function runContinuousTick(){
+  if(contInFlight) return;
+  if(!combatActive()){ $('contStatus').textContent='idle'; return; }
+  contInFlight=true; $('contStatus').textContent='thinking…';
+  try{
+    const payload=JSON.stringify(buildPayload());
+    const text = $('localToggle').checked
+      ? await callOllama(payload, $('ollamaModel').value, $('ollamaUrl').value)
+      : await callClaude(payload, $('contModel').value, 300);
+    $('liveAi').textContent=text.trim();
+    $('contStatus').textContent='⟳ '+new Date().toLocaleTimeString();
+  }catch(e){ $('contStatus').textContent='error'; $('liveAi').textContent='⚠ '+e.message; }
+  finally{ contInFlight=false; }
+}
+function setupContinuous(){
+  clearInterval(contTimer);
+  if($('contToggle').checked){
+    const sec=Math.max(5, +$('contInterval').value || 15);
+    contTimer=setInterval(runContinuousTick, sec*1000);
+    $('contStatus').textContent='armed';
+  }else{ $('contStatus').textContent='off'; }
+}
+
+/* ---------- LIVE MODE (WebSocket bridge) ---------- */
+let ws=null, liveRenderPending=false;
+function liveRender(){ if(liveRenderPending) return; liveRenderPending=true; requestAnimationFrame(()=>{ liveRenderPending=false; render(); }); }
+function connectLive(){
+  if(ws){ ws.close(); ws=null; $('liveBtn').textContent='🔌 Live'; $('modeTag').textContent='Replay mode'; return; }
+  pause();
+  ws=new WebSocket('ws://127.0.0.1:8777');
+  $('modeTag').textContent='Connecting…';
+  ws.onopen=()=>{ $('modeTag').textContent='● LIVE'; $('modeTag').style.color='var(--good)'; $('liveBtn').textContent='⏹ Stop live'; pushFeed('ev-sys','Live bridge connected'); render(); };
+  ws.onclose=()=>{ $('modeTag').textContent='Replay mode'; $('modeTag').style.color=''; $('liveBtn').textContent='🔌 Live'; ws=null; };
+  ws.onerror=()=>{ $('modeTag').textContent='Bridge offline'; pushFeed('ev-sys','No bridge — run ;combatlens in Lich'); liveRender(); };
+  ws.onmessage=(ev)=>{
+    let msg; try{ msg=JSON.parse(ev.data); }catch(e){ return; }
+    if(msg.t==='line'){ parseLine(msg.text); cursor++; liveRender(); }
+    else if(msg.t==='state'){ applyState(msg); liveRender(); }
+  };
+}
+function applyState(m){
+  if(m.maxhealth) S.vitals.health=[m.health,m.maxhealth];
+  if(m.maxmana)   S.vitals.mana=[m.mana,m.maxmana];
+  if(m.maxstamina)S.vitals.stamina=[m.stamina,m.maxstamina];
+  if(m.maxspirit) S.vitals.spirit=[m.spirit,m.maxspirit];
+  if(m.stance) S.stance=m.stance;
+  if(m.rt!=null) S.roundtime=m.rt;
+  if(m.char) S.charName=m.char;
+  if('left' in m) S.hands.left = m.left||'';
+  if('right' in m) S.hands.right = m.right||'';
+  if(hasWeapon()) S.everWielded=true;
+  const ind=m.indicators||{}; const on=k=>ind[k]==='y'||ind[k]===true;
+  if(on('IconPRONE')) S.position='prone';
+  else if(on('IconKNEELING')) S.position='kneeling';
+  else if(on('IconSITTING')) S.position='sitting';
+  else if(on('IconSTANDING')) S.position='standing';
+  S.status=new Set();
+  const map={IconSTUNNED:'stunned',IconBLEEDING:'bleeding',IconWEBBED:'webbed',IconDISEASED:'diseased',IconPOISONED:'poisoned',IconDEAD:'DEAD',IconCALMED:'calmed'};
+  for(const k in map){ if(on(k)) S.status.add(map[k]); }
+}
+
+/* ---------- WIRING ---------- */
+$('fileIn').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>loadText(rd.result); rd.readAsText(f); });
+$('playBtn').onclick=()=>{ playing?pause():play(); };
+$('resetBtn').onclick=reset;
+$('jumpBtn').onclick=()=>{ if(lines.length){ jumpToCombat(); } };
+$('liveBtn').onclick=connectLive;
+$('scrub').addEventListener('input',e=>{
+  pause(); const target=+e.target.value;
+  if(target<cursor){ const keep=target; S=freshState(); cursor=0; for(let i=0;i<keep && i<lines.length;i++){ parseLine(lines[i]); cursor++; } }
+  else { step(target-cursor); }
+  render();
+});
+$('speedSel').addEventListener('change',()=>{ if(playing){ pause(); play(); } });
+$('aiBtn').onclick=aiRead;
+$('localToggle').addEventListener('change',e=>{ const on=e.target.checked; $('ollamaCfg').style.display=on?'block':'none'; $('contOnlineCfg').style.display=on?'none':'block'; });
+$('contToggle').addEventListener('change',setupContinuous);
+$('contInterval').addEventListener('change',setupContinuous);
+
+render();
+setupContinuous();
+</script>
+</body>
+</html>
