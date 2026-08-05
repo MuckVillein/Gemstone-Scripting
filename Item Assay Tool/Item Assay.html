@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Item Assayer — WPS CER Deduction</title>
+<!-- Educated Barbarian https://github.com/MuckVillein -->
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Besley:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #161412;
+    --bg-panel: #1e1e1e;
+    --bg-notes: #272420;
+    --ink: #e4e0d8;
+    --ink-dim: #9a958c;
+    --ink-faint: #6b6560;
+    --accent: #3d9e84;
+    --accent-fill: #1f4e42;
+    --border: #3a3530;
+    --border-light: #4a443c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 28px 48px;
+  }
+
+  header.site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .brand { color: var(--ink); font-weight: 700; text-decoration: none; font-size: 15px; }
+  .brand:hover { color: var(--accent); }
+  .header-note { font-size: 12px; color: var(--ink-faint); }
+
+  .eyebrow {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    letter-spacing: 0.2px;
+  }
+
+  h1 {
+    font-family: 'Besley', serif;
+    font-weight: 700;
+    font-size: 28.8px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+
+  .calc-intro { margin-bottom: 26px; max-width: 720px; color: var(--ink-dim); font-size: 13.5px; }
+  .calc-intro a { color: var(--accent); }
+
+  h2 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 16px;
+    margin: 0 0 14px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h2 .num {
+    font-size: 11px;
+    color: var(--ink-faint);
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-weight: 400;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(340px, 1fr) minmax(380px, 1.15fr);
+    gap: 22px;
+  }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+
+  section.table-panel {
+    background: var(--bg-panel);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px 18px;
+  }
+  section.table-panel + section.table-panel { margin-top: 18px; }
+
+  textarea {
+    width: 100%;
+    min-height: 190px;
+    background: #141312;
+    color: var(--ink);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  .btnrow { display:flex; gap:10px; margin-top:12px; flex-wrap: wrap; }
+
+  button.btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 13px;
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+    background: var(--bg-panel);
+    color: var(--ink);
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  button.btn:hover { border-color: var(--accent); color: var(--accent); }
+  button.btn:active { transform: translateY(1px); }
+  button.btn.primary { border-color: var(--accent); color: var(--accent); }
+
+  .hint { font-size: 11.5px; color: var(--ink-faint); margin-top: 8px; }
+
+  .fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+    margin-top: 4px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field.full { grid-column: 1 / -1; }
+  .field label {
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    color: var(--ink-faint);
+  }
+  .field input[type="text"], .field input[type="number"], .field select {
+    background: #141312;
+    border: 1px solid var(--border-light);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 7px 9px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+
+  .checkrow {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--ink-dim);
+    padding: 5px 0;
+  }
+  .checkrow input { accent-color: var(--accent); width: 15px; height: 15px; margin-top: 2px; flex-shrink: 0; }
+  .checkrow b { color: var(--ink); }
+
+  /* Ledger */
+  table.ledger {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+  }
+  table.ledger thead th {
+    text-align: left;
+    font-size: 10.5px;
+    letter-spacing: 0.4px;
+    color: var(--ink-faint);
+    font-weight: 400;
+    padding: 0 8px 8px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  table.ledger td {
+    padding: 7px 8px 7px 0;
+    border-bottom: 1px dashed var(--border);
+    color: var(--ink-dim);
+    opacity: 0;
+    animation: lineIn 0.3s ease forwards;
+  }
+  table.ledger tr:nth-child(n) td { animation-delay: calc(0.03s * var(--i, 0)); }
+  @keyframes lineIn { from { opacity:0; transform: translateY(3px);} to {opacity:1; transform: translateY(0);} }
+  @media (prefers-reduced-motion: reduce) { table.ledger td { animation: none !important; opacity: 1 !important; } }
+
+  table.ledger td.label { color: var(--ink); }
+  table.ledger td.val { text-align: right; color: var(--accent); }
+  table.ledger td.val.neg { color: var(--ink-faint); }
+  table.ledger tr.total td { border-top: 1px solid var(--border-light); border-bottom: none; font-weight: 600; padding-top: 10px; }
+  table.ledger tr.total td.label { color: var(--ink); }
+  table.ledger tr.total td.val { color: var(--accent); }
+
+  .verdict-panel {
+    margin-top: 18px;
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .verdict-panel.conf-solid {
+    border: 2px solid var(--accent);
+    background: var(--bg-panel);
+  }
+  .verdict-panel.conf-dashed {
+    border: 2px dashed var(--border);
+    background: var(--bg-notes);
+  }
+  .verdict-panel.conf-unreliable {
+    border: 2px solid #a85c42;
+    background: #2a1f1a;
+  }
+
+  .verdict-top { display:flex; align-items:center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .verdict-cer {
+    font-family: 'Besley', serif;
+    font-weight: 700;
+    font-size: 30px;
+    color: var(--ink);
+  }
+  .verdict-cer small { font-size: 13px; color: var(--ink-dim); font-family:'IBM Plex Mono',monospace; font-weight:500; }
+
+  .conf-pill {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .conf-solid .conf-pill { border: 1px solid var(--accent); color: var(--accent); }
+  .conf-dashed .conf-pill { border: 1px dashed var(--ink-faint); color: var(--ink-faint); }
+  .conf-unreliable .conf-pill { border: 1px solid #a85c42; color: #d4886f; background: rgba(168,92,66,0.15); }
+
+  .verdict-word { margin-top: 8px; color: var(--ink-dim); font-size: 13px; }
+  .verdict-word b { color: var(--ink); }
+
+  .caveats { margin-top: 14px; }
+  .caveats-title { font-size: 10.5px; letter-spacing: 0.5px; color: var(--ink-faint); margin-bottom: 6px; }
+  .caveats ul { margin: 0; padding-left: 18px; }
+  .caveats li { font-size: 12px; color: var(--ink-dim); margin-bottom: 5px; }
+
+  .empty-state {
+    color: var(--ink-faint);
+    font-size: 13px;
+    padding: 26px 10px;
+    text-align: center;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+  }
+
+  details.refs {
+    margin-top: 20px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    background: var(--bg-panel);
+  }
+  details.refs summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  table.refs-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11.5px; }
+  table.refs-table th { text-align:left; color: var(--ink-faint); font-weight: 400; font-size:10px; padding: 4px 8px 4px 0; border-bottom:1px solid var(--border-light); }
+  table.refs-table td { padding: 4px 8px 4px 0; border-bottom: 1px dashed var(--border); color: var(--ink-dim); }
+  table.refs-table td.pos { color: var(--accent); }
+  table.refs-table td.negv { color: var(--ink-faint); }
+
+  #confirmDetails summary.confirm-summary {
+    cursor: pointer;
+    font-family: 'Besley', serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--ink);
+    list-style: none;
+  }
+  #confirmDetails summary.confirm-summary::-webkit-details-marker { display: none; }
+  #confirmDetails summary.confirm-summary::before {
+    content: '▸';
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--accent);
+    transition: transform 0.15s ease;
+  }
+  #confirmDetails[open] summary.confirm-summary::before { transform: rotate(90deg); }
+  .confirm-note {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 400;
+    color: #d4886f;
+    margin-left: 8px;
+  }
+  #confirmDetails.panel-needs-attention summary.confirm-summary {
+    color: #d4886f;
+  }
+  #confirmDetails.panel-needs-attention summary.confirm-summary::before {
+    color: #c1594f;
+  }
+  section.table-panel.panel-needs-attention {
+    border-color: #c1594f;
+    animation: attnPulse 1.6s ease-in-out infinite;
+  }
+  .field.needs-attention {
+    border: 2px solid #c1594f;
+    border-radius: 8px;
+    padding: 8px;
+    margin: -8px;
+    background: rgba(193, 89, 79, 0.08);
+    animation: attnPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes attnPulse {
+    0%, 100% { border-color: #c1594f; }
+    50% { border-color: #8a3f37; }
+  }
+  @media (prefers-reduced-motion: reduce) { .field.needs-attention { animation: none; } }
+
+  .refs-list { margin-top: 8px; }
+  .refs-list p { font-weight: 700; font-size: 12px; margin: 14px 0 4px; color: var(--ink); }
+  .refs-list ul { margin: 0; padding-left: 18px; }
+  .refs-list li { font-size: 12px; color: var(--ink-dim); margin-bottom: 4px; }
+  .refs-list a { color: var(--accent); }
+
+  footer.page-footer {
+    margin-top: 28px;
+    font-size: 11px;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+  footer.page-footer a { color: var(--ink-dim); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="site-header">
+    <a class="brand" href="https://www.gs4tools.com/">GS4 Tools</a>
+    <div class="header-note" id="dateline"></div>
+  </header>
+
+  <p class="eyebrow">Profession Services</p>
+  <h1>Item Assayer</h1>
+  <p class="calc-intro">Paste an item's raw description to deduce its Weighting/Padding/Sighting combat effectiveness rating (CER) from its stated modify difficulty, per the method on <a href="https://gswiki.play.net/Weighting,_Padding,_Sighting" target="_blank">GSWiki's WPS page</a>. Not a substitute for an in-game ASSESS.</p>
+
+  <div class="grid">
+    <!-- LEFT: input -->
+    <div>
+      <section class="table-panel">
+        <h2><span class="num">01</span> Paste item text</h2>
+        <textarea id="rawText" placeholder="Paste the item's raw description here, e.g.:
+
+The helm is miscellaneous armor that covers the head...
+It looks like this item has been mainly crafted out of glaes, a rare metal.
+It is padded to lessen the damage the wearer takes, but exactly how much requires assessment.
+It is predominantly crafted of glaes.
+It is a simple project (50 difficulty) for an adventurer to modify."></textarea>
+        <div class="btnrow">
+          <button class="btn primary" onclick="runAssay()">Assay item</button>
+          <button class="btn" onclick="clearAll()">Clear</button>
+        </div>
+        <div class="hint">Parsing is a best-effort first pass — check the fields below and correct anything it missed before reading the ledger.</div>
+      </section>
+
+      <section class="table-panel">
+        <details id="confirmDetails">
+          <summary class="confirm-summary"><span class="num">02</span> Confirm properties <span id="confirmSummaryNote" class="confirm-note"></span></summary>
+          <div class="fields" style="margin-top:14px;">
+          <div class="field full">
+            <label>Stated total difficulty</label>
+            <input type="number" id="f_difficulty" placeholder="e.g. 50">
+          </div>
+          <div class="field">
+            <label>Material</label>
+            <input type="text" id="f_material" placeholder="e.g. glaes">
+          </div>
+          <div class="field full">
+            <div class="checkrow" title="Wood's modifier is category-specific: -10 for shield/bow/runestaff vs -100 for weapon/armor, per official table."><input type="checkbox" id="f_woodCategory"> Wood: shield/bow/runestaff (&minus;10 not &minus;100)</div>
+          </div>
+          <div class="field">
+            <label>Enchant bonus (+X)</label>
+            <input type="number" id="f_enchant" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Total resistance %</label>
+            <input type="number" id="f_resist" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Target Defense bonus</label>
+            <input type="number" id="f_td" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Defender (DS) bonus</label>
+            <input type="number" id="f_defender" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Ensorcell tier (0–5)</label>
+            <input type="number" id="f_ensorcell" placeholder="0" min="0" max="5">
+          </div>
+          <div class="field">
+            <label>Sanctify tier (0–5)</label>
+            <input type="number" id="f_sanctify" placeholder="0" min="0" max="5">
+          </div>
+          <div class="field full">
+            <div class="checkrow" title="Only available as an upgrade to Sanctify T5 (GSWiki Sanctified page) — not an independent flare. Carries its own +50 line ON TOP of Sanctify T5's cost (official table: -20/tier, -50 for Holy Fire). Only check this if Sanctify above is set to 5."><input type="checkbox" id="f_holyFire"> Sanctify T5 further imbued with Holy Fire (+50)</div>
+
+          </div>
+          <div class="field">
+            <label># Category B flares</label>
+            <input type="number" id="f_flares" placeholder="0">
+          </div>
+          <div class="field full">
+
+          </div>
+          <div class="field full">
+            <label title="They do NOT stack additively — only the highest value matters. Confirmed: Lore Flares=200, Warding Flares=200 flat. Least Moods=0 confirmed via 2 items. Autoscripter/'Ingrained Quality'-style names are typically fluff (0).">Flourishes present (highest value only, not summed)</label>
+            <input type="number" id="f_flourish" placeholder="0">
+          </div>
+          <div class="field full">
+            <div class="checkrow" title="GSWiki: 'natural 10 points of weighting.' Contributes trunc(10²)=100 to difficulty. Only katanas and claidhmores confirmed to have an inherent baseline."><input type="checkbox" id="f_katanaBase"> Item is a <b>katana</b> (10 CER baseline, +100 to difficulty)</div>
+          </div>
+          <div class="field full">
+            <div class="checkrow" title="Confirmed free (0) when the AS/DS-vs-undead bonus appears with no accompanying Bane sentence. Distinct from the bundled Bane package below, which requires both."><input type="checkbox" id="f_bareUndeadBonus"> Bare "+X AS/DS vs. undead" with no Bane sentence (free)</div>
+          </div>
+          <div class="field full">
+            <div class="checkrow" title="Standard boilerplate for ANY Category D script, identified or not — NOT a minor caveat. Several common scripts cost a flat 200. Ignoring this once produced CER 14 against a true ASSESS of CER 2."><input type="checkbox" id="f_unknownScript"> Item text includes <b>"unknown (scripted) benefit"</b></div>
+          </div>
+          <div class="field full" id="scriptGuessWrap" style="display:none;">
+            <label>Search for the script by name, or leave blank if unidentified</label>
+            <input type="text" id="f_scriptSearch" list="scriptDatalist" placeholder="Type to search: Parasite, Ithzir, Fusion, Sigil Staff, Voln..." autocomplete="off">
+            <datalist id="scriptDatalist"></datalist>
+            <div id="scriptMatchNote" style="font-size:11.5px; margin-top:6px; color:var(--ink-faint);"></div>
+          </div>
+          <div class="field full" id="scriptCustomWrap" style="display:none;">
+            <label>Manual override (optional — takes precedence over the search match above if filled in)</label>
+            <input type="number" id="f_scriptCustom" placeholder="e.g. 140">
+          </div>
+          <div class="field">
+            <label>Padding type present</label>
+            <select id="f_padtype">
+              <option value="none">None stated</option>
+              <option value="crit">Critical only</option>
+              <option value="dmg">Damage only</option>
+              <option value="both">Both crit + damage</option>
+            </select>
+          </div>
+          <div class="field full">
+            <div class="checkrow"><input type="checkbox" id="f_bane"> Creature Bane present (+100) &mdash; standalone Bane only, no bundled bonus stated</div>
+            <div class="checkrow" title="Confirmed via 3 items across 2 creature types: Bane+bonus charged separately overshoots every time; a single +100 closes exactly. Don't check alongside standalone Bane, and don't also enter the bonus in TD/Defender."><input type="checkbox" id="f_gub"> Bundled Bane package (Bane + one bonus, described together) — 100 flat</div>
+            <div class="checkrow" title="Isolation analysis, n=88 shop items, 86% exact match. Remainder was explained by other properties, not holy itself."><input type="checkbox" id="f_holy"> "Holy item" stated (confirmed 0 contribution)</div>
+          </div>
+          <div class="field full">
+            <label>Non-rank enhancives (stat base/bonus, max resource, recovery) — sum of "trained N times" reqs</label>
+            <input type="text" id="f_enhancives" placeholder="e.g. 40, 27">
+          </div>
+          <div class="field full">
+            <div class="checkrow"><input type="checkbox" id="f_isWeapon"> Item is a weapon (adds a flat +200 to the non-rank enhancive estimate below)</div>
+          </div>
+          <div class="field full">
+            <div class="checkrow" title="Confirmed on armor accessories (n=27, R²=0.997) and torso armor (1 exact ASSESS case). Cross-validates ZHEPHEN's 2020 formula."><input type="checkbox" id="f_useEnhFormula" checked> Apply non-rank enhancive formula: Trunc(&Sigma;req/3) [+200 if weapon]</div>
+          </div>
+          <div class="field full">
+            <label title="Ability name required — the same boost/req costs different amounts on different abilities.">Rank-type enhancives: "Ability Name: boost@req", comma-separated</label>
+            <input type="text" id="f_rankEnhList" placeholder="e.g. Spirit Mana Control: 3@12">
+          </div>
+          <div class="field full">
+            <div class="checkrow" title="Exact (ability, boost, req) match only — no general formula exists. Unmatched entries are flagged unknown, not guessed."><input type="checkbox" id="f_useRankLookup"> Look up rank enhancives against confirmed pairs (table below)</div>
+          </div>
+          </div>
+        </details>
+      </section>
+    </div>
+
+    <!-- RIGHT: ledger + verdict -->
+    <div>
+      <div id="unaccountedBanner"></div>
+      <section class="table-panel">
+        <h2><span class="num">03</span> Running tally</h2>
+        <div id="ledgerHost">
+          <div class="empty-state">Paste an item and click "Assay item" to build the ledger.</div>
+        </div>
+      </section>
+
+      <div id="verdictHost"></div>
+
+      <details class="refs">
+        <summary>Reference tables &amp; sources used</summary>
+        <div class="refs-list">
+          <p>Assess-language table — Padding, GSWiki (last edited Aug 27, 2025)</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>CER range</th><th>Assess word</th></tr>
+          <tr><td>1–2</td><td>Lightly</td></tr>
+          <tr><td>3–4</td><td>Fairly</td></tr>
+          <tr><td>5–6</td><td>Somewhat</td></tr>
+          <tr><td>7–8</td><td>Decently</td></tr>
+          <tr><td>9–10</td><td>Heavily</td></tr>
+          <tr><td>11–13</td><td>Very heavily</td></tr>
+          <tr><td>14–15</td><td>Exceptionally</td></tr>
+          <tr><td>16–20</td><td>Masterfully</td></tr>
+          <tr><td>21–25</td><td>Superbly</td></tr>
+          <tr><td>26–30</td><td>Expertly</td></tr>
+          <tr><td>31–35</td><td>Phenomenally</td></tr>
+          <tr><td>36–40</td><td>Fantastically</td></tr>
+          <tr><td>41–45</td><td>Incredibly</td></tr>
+          <tr><td>46–50</td><td>Wondrously</td></tr>
+        </table>
+        <div class="refs-list">
+          <p>Sample material modifiers — full table has ~70 entries; Weighting, Padding, Sighting, GSWiki (last edited Nov 19, 2024)</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>Material</th><th>Modifier</th></tr>
+          <tr><td>vaalorn</td><td class="pos">+10</td></tr>
+          <tr><td>mithril</td><td class="pos">+20</td></tr>
+          <tr><td>glaes</td><td class="negv">&minus;10</td></tr>
+          <tr><td>vultite</td><td>0</td></tr>
+          <tr><td>rolaren</td><td class="negv">&minus;40</td></tr>
+          <tr><td>adamantine</td><td class="negv">&minus;150</td></tr>
+        </table>
+        <div class="refs-list">
+          <p>Flare values confirmed via live isolation on shop data (July 4-5, 2026)</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>Flare type</th><th>Value</th><th>n</th></tr>
+          <tr><td>Elemental (fire/ice/disintegrate/dark/earth)</td><td class="pos">~100</td><td>8</td></tr>
+          <tr><td>Mana (+1 tier)</td><td class="pos">~20</td><td>6</td></tr>
+          <tr><td>Mana (+3 tier)</td><td class="pos">~60</td><td>1</td></tr>
+          <tr><td>Temporary flares/blessings</td><td>0</td><td>52</td></tr>
+        </table>
+        <div class="refs-list">
+          <p>Rank enhancive observations (NOT a formula — exact confirmed pairs only, use for reference)</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>Ability (Ranks)</th><th>Boost</th><th>Req</th><th>Difficulty</th></tr>
+          <tr><td>Ranged Weapons</td><td>+1</td><td>2</td><td>1</td></tr>
+          <tr><td>Combat Maneuvers</td><td>+1</td><td>2</td><td>5</td></tr>
+          <tr><td>Spell Aiming</td><td>+1</td><td>2</td><td>1</td></tr>
+          <tr><td>Survival</td><td>+2</td><td>4</td><td>3</td></tr>
+          <tr><td>Spiritual Lore - Summoning</td><td>+1</td><td>4</td><td>2</td></tr>
+          <tr><td>Mental Lore - Manipulation</td><td>+1</td><td>4</td><td>18</td></tr>
+          <tr><td>Magic Item Use</td><td>+2</td><td>9</td><td>37</td></tr>
+          <tr><td>Elemental Lore - Fire</td><td>+2</td><td>10</td><td>38</td></tr>
+          <tr><td>Sorcerous Lore - Necromancy</td><td>+2</td><td>10</td><td>9</td></tr>
+          <tr><td>Shield Use</td><td>+2</td><td>6</td><td>20</td></tr>
+          <tr><td>Spell Aiming</td><td>+2</td><td>6</td><td>19</td></tr>
+          <tr><td>Harness Power</td><td>+2</td><td>6</td><td>20</td></tr>
+          <tr><td>Spirit Mana Control</td><td>+2</td><td>6</td><td>20</td></tr>
+          <tr><td>Stalking and Hiding</td><td>+3</td><td>9</td><td>7</td></tr>
+          <tr><td>Mental Lore - Manipulation</td><td>+3</td><td>21</td><td>18</td></tr>
+          <tr><td>Elemental Lore - Water</td><td>+3</td><td>21</td><td>18</td></tr>
+          <tr><td>Armor Use</td><td>+3</td><td>21</td><td>18</td></tr>
+          <tr><td>Dodging</td><td>+3</td><td>12</td><td>10</td></tr>
+          <tr><td>Harness Power</td><td>+3</td><td>12</td><td>55</td></tr>
+          <tr><td>Magic Item Use</td><td>+3</td><td>17</td><td>14</td></tr>
+          <tr><td>Perception</td><td>+4</td><td>14</td><td>11</td></tr>
+          <tr><td>Stalking and Hiding</td><td>+4</td><td>14</td><td>12</td></tr>
+          <tr><td>Shield Use</td><td>+4</td><td>20</td><td>18</td></tr>
+          <tr><td>Spell Aiming</td><td>+4</td><td>20</td><td>17-18</td></tr>
+          <tr><td>Two-Handed Weapons</td><td>+4</td><td>20</td><td>18</td></tr>
+          <tr><td>Spiritual Lore - Blessings</td><td>+4</td><td>34</td><td>30</td></tr>
+          <tr><td>Spiritual Lore - Summoning</td><td>+4</td><td>34</td><td>30</td></tr>
+          <tr><td>Pickpocketing</td><td>+5</td><td>21</td><td>18</td></tr>
+          <tr><td>Brawling</td><td>+5</td><td>30</td><td>27</td></tr>
+          <tr><td>Ranged Weapons</td><td>+5</td><td>30</td><td>26-27</td></tr>
+          <tr><td>Shield Use</td><td>+5</td><td>30</td><td>27</td></tr>
+          <tr><td>Magic Item Use</td><td>+5</td><td>42</td><td>36</td></tr>
+          <tr><td>Spell Aiming</td><td>+5</td><td>30</td><td>41</td></tr>
+          <tr><td>First Aid</td><td>+6</td><td>30</td><td>25</td></tr>
+          <tr><td>Disarming Traps</td><td>+6</td><td>30</td><td>25</td></tr>
+          <tr><td>Stalking and Hiding</td><td>+6</td><td>30</td><td>25</td></tr>
+          <tr><td>Thrown Weapons</td><td>+6</td><td>42</td><td>37</td></tr>
+          <tr><td>Spell Aiming</td><td>+6</td><td>42</td><td>37</td></tr>
+          <tr><td>Brawling</td><td>+6</td><td>42</td><td>37</td></tr>
+          <tr><td>Stalking and Hiding</td><td>+7</td><td>39</td><td>33</td></tr>
+          <tr><td>Perception</td><td>+7</td><td>39</td><td>33</td></tr>
+          <tr><td>Brawling</td><td>+8</td><td>72</td><td>64</td></tr>
+          <tr><td>Elemental Mana Control</td><td>+8</td><td>72</td><td>64</td></tr>
+          <tr><td>Ranged Weapons</td><td>+8</td><td>72</td><td>63</td></tr>
+          <tr><td>Two Weapon Combat</td><td>+8</td><td>72</td><td>63</td></tr>
+          <tr><td>Swimming</td><td>+14</td><td>63</td><td>63</td></tr>
+        </table>
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;">~45 confirmed pairs as of live isolation batch (July 2026). Key finding: boost/req alone does NOT determine cost — same boost/req can differ by ability (Ranged Weapons +1/req2=1 vs Combat Maneuvers +1/req2=5), AND four abilities now show non-monotonic pairs where a HIGHER boost/req costs LESS than a lower one for the SAME ability (Magic Item Use +2→37 vs +3→14; Shield Use +2→20 vs +4→18; Spirit Mana Control +2→20 vs +3→8 from an earlier user item; Harness Power +2→20 vs +3→55, which goes the other direction). Four instances is too many to keep calling isolated anomalies — this is a real feature of the rank-enhancive Tier system, not noise. One caveat discovered mid-batch: items can carry seller-tagged temporary WPS ("temp. damage weighting") not reflected in structured fields, which contaminates isolation if not manually cross-checked against raw text (excluded several Ambush Ranks candidates for this reason).</p>
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;"><b>Tier-group discovery (July 2026):</b> user-provided GSWiki User:ZHEPHEN enhancive tier chart (2020) classifies abilities into tiers (e.g. Tier 7: Physical Fitness/Survival/Disarming Traps/Picking Locks/Stalking&amp;Hiding/Perception/First Aid/Trading/Pickpocketing; Tier 10: Two Weapon Combat/Shield Use/Combat Maneuvers/Edged/Blunt/Two-Handed/Ranged/Polearm Weapons/Brawling/Ambush/Dodging/Spell Aiming/Harness Power/Elemental-Mental-Spirit Mana Control; Tier 14: Arcane Symbols/Magic Item Use/MOC). ZHEPHEN's stated formula (Trunc(level_req/3)) did NOT reproduce our confirmed values when tested directly — off by large, inconsistent factors. But the TIER GROUPINGS themselves are strongly confirmed: multiple different abilities in the same tier bucket produce IDENTICAL difficulty at the same boost/req (e.g. Shield Use +4/req20=18 = Two-Handed Weapons +4/req20=18; Brawling/Thrown Weapons/Spell Aiming all +6/req42=37; Stalking&amp;Hiding/First Aid/Disarming Traps all +6/req30=25). The tool now uses this for tier-group fallback matching when an exact ability isn't in the lookup table.</p>
+        <div class="refs-list">
+          <p>Flare identification (loresong text), GSWiki Category:Flares, last edited Feb 26, 2025</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>Loresong text</th><th>Flare type</th></tr>
+          <tr><td>"...power of a corrosive substance"</td><td>Acid</td></tr>
+          <tr><td>"...power of an ice elemental"</td><td>Cold</td></tr>
+          <tr><td>"...power of a fire elemental"</td><td>Fire/Heat</td></tr>
+          <tr><td>"...power of a flaming substance"</td><td>Plasma (distinct from Fire — undead-effective)</td></tr>
+          <tr><td>"...temporarily infused with a divine flaming substance"</td><td>Guiding Light (temporary Plasma, Consecrate 1604) — 0 contribution</td></tr>
+          <tr><td>"...power of a lightning bolt"</td><td>Lightning</td></tr>
+          <tr><td>"...power of an earth elemental"</td><td>Earth/Vibration</td></tr>
+          <tr><td>"...a disintegrating substance"</td><td>Disintegration</td></tr>
+          <tr><td>"...a disrupting substance"</td><td>Disruption</td></tr>
+          <tr><td>"...a strange anti-magical substance (N dispel attempts)"</td><td>Dispel</td></tr>
+          <tr><td>"...a grappling force"</td><td>Grapple</td></tr>
+          <tr><td>"...a dark substance"</td><td>Vacuum/Void</td></tr>
+          <tr><td>"...infused with death"</td><td>Xazkruvrixis (inherent)</td></tr>
+          <tr><td>"Protects against magical attacks..."</td><td>TD bonus (not a flare)</td></tr>
+        </table>
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Open gaps: Acuity and Dispel have official formulas (15/tier, 50+50&times;attempts) but no isolation data yet. Acid, Sonic, Steam, Unbalance, Water, Magma, Mechanical, Terror, and Holy Water flares have never appeared in a submitted item — no price data at all. Chronomage, Ironwright's, Poison, Rotating, and Rotflares scripts still aren't in the picker. Black alloy is a strong untested candidate for an 8th inherent-flare material (Shadowdeath flares are documented as exclusive to it, same pattern as gornar/zorchar/drakar/rhimar). Structural rule confirmed via GSWiki's Item Properties page (last edited Feb 15, 2026): shields can NEVER have damage padding, only critical.</p>
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;"><b>Full re-verification against the official Script/Other Gear Difficulty Modifier tables (GSWiki, last edited Nov 19, 2024)</b> confirmed the enchant formula exactly as used all along (ROUND(((Bonus-2)&sup2;)/9) — a player claim that it's linear "enchant &times;5" is incorrect), resolved Clockwerke Weapon (T2 = 150, previously totally unknown), corrected Forest Armor to a flat 70 across all tiers (not scaled like Elven Armor — this retroactively solved a previously "impossible" T4 item), and confirmed Briar Flares T1/T2/T3 = 70/100/200 exactly, clearing Briar T3 of suspicion from two earlier messy items whose real problem was elsewhere.</p>
+        <div class="refs-list">
+          <p>Weapon-type inherent difficulty modifiers</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>Weapon type</th><th>Modifier</th><th>Notes</th></tr>
+          <tr><td>Claidhmore</td><td class="pos">40 CER critical (baseline, squared like any WPS)</td><td>Contributes trunc(40&sup2;)=1600 to difficulty. Up to 50 CER for legendary examples. Confirmed via GSWiki + an ~1,589-difficulty item with almost no other properties closing to an exact 40&sup2; remainder.</td></tr>
+          <tr><td>Katana</td><td class="pos">10 CER critical (baseline, squared like claidhmore — trunc(10&sup2;)=100 to difficulty)</td><td>Corrected framing: GSWiki's Tatterclaws' Comprehensive Gear Guide states directly "katanas have a natural 10 points of weighting," NOT a flat 100 difficulty add as first described (the arithmetic result is identical either way, trunc(10&sup2;)=100, but the correct unit is a CER baseline like claidhmore, not a flat surcharge). Confirmed via GSWiki User:ZHEPHEN's "Other Penalties" table (2020, unofficial) AND an item where subtracting exactly 100 resolved an otherwise-unexplained gap, making "It is NOT weighted... than a normal katana" mathematically consistent (remainder went to exact 0). Only katanas and claidhmores are confirmed to carry this — Tatterclaws' guide states "most weapons do not have inherent crit weighting" — so this should NOT be assumed for other weapon types (e.g. short swords) without their own confirmation.</td></tr>
+        </table>
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Claidhmore and katana work differently: claidhmore's 40 is a CER baseline that gets squared like any other WPS value; katana's 100 is a flat addition to the difficulty subtotal, more like an inherent flare/script charge. Don't conflate the two when applying them. Worth checking other "notoriously heavy" or hybrid weapon types for similar undocumented baselines.</p>
+        <div class="refs-list">
+          <p>Additional unofficial script values (GSWiki User:ZHEPHEN, 2020 — not independently confirmed this session, treat as leads only)</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>Script</th><th>Value</th></tr>
+          <tr><td>Sword Cane</td><td>200</td></tr>
+          <tr><td>T3 Sprite weapon</td><td>350</td></tr>
+          <tr><td>Wand-holding staff</td><td>20</td></tr>
+        </table>
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Same source also lists 2-slot Fusion at 275, which CONFLICTS with the current official table's 75 — trust the official table (more recent, directly sourced) over this figure. Also notes "Drake weapons do not seem to carry the -100 flare penalty," suggesting drake may be an 8th inherent-flare material candidate, untested.</p>
+        <div class="refs-list">
+          <p>Validated against real user-owned items (ASSESS-confirmed ground truth)</p>
+        </div>
+        <table class="refs-table">
+          <tr><th>Item</th><th>Deduced</th><th>Actual ASSESS</th><th>Match</th></tr>
+          <tr><td>Vultite full plate, +20, Parasite T1</td><td class="pos">CER 2, 30-45% to 3</td><td>CER 2, 30% to 3</td><td class="pos">Exact</td></tr>
+          <tr><td>Full leathers, +29, S5, mixed enhancives</td><td class="pos">CER 8, 35% to 9 (with rank enhancive solved backward)</td><td>CER 8, 35% to 9</td><td class="pos">Exact</td></tr>
+          <tr><td>Rolaren Ithzir armor, +50, E5, mixed crit+dmg padding</td><td>Combined remainder 187, consistent with both "heavily" (e.g. CER10 + CER9 at ~33%)</td><td>Both stated only as "heavily" — no exact ASSESS available</td><td>Consistent, unconfirmed</td></tr>
+          <tr><td>Mithril Nightbringer weapon, +35, E5/S5, Holy Fire, forged, poisoned</td><td class="pos">CER 5 exact (perfect square)</td><td>CER 5</td><td class="pos">Exact</td></tr>
+          <tr><td>Mithglin Blink Weapon, +40, S5, Holy Fire, MEW-infused</td><td class="pos">CER 7, ~80% to 8 (off by 1 pt of remainder — normal noise)</td><td>CER 7, 80% to 8</td><td class="pos">Exact (within noise)</td></tr>
+          <tr><td>Rusalkoren buckler, +35, E2/S5, Holy Fire, Banshee's Ward +10</td><td class="pos">Remainder exactly 0 — no WPS stated, script solves to exactly 200</td><td>No ASSESS available (forum listing)</td><td class="pos">Internally exact (zero remainder)</td></tr>
+          <tr><td>Steel Blink Weapon, +40, GUB +10 AS, E5/S5, Holy Fire</td><td class="pos">CER 25 exact, once GUB corrected to a single 100-pt package (not Bane+AS stacked at 200)</td><td>N/A — corrected retroactively via a second item</td><td class="pos">Perfect square only under corrected GUB treatment</td></tr>
+          <tr><td>Eahnor shield, +40, GUB +10 DS, E5/S5, Holy Fire, dispel flare</td><td class="pos">Remainder exactly 0, confirms GUB = single 100-pt package</td><td>No ASSESS available (forum listing)</td><td class="pos">Internally exact (zero remainder)</td></tr>
+          <tr><td>Rolaren knife, +40, standalone Defender+25, bundled Bane vs. magical creatures +25</td><td class="pos">CER 7 exact (perfect square), confirms bundled Bane generalizes beyond undead to other creature types</td><td>No ASSESS available (forum listing)</td><td class="pos">Perfect square only when treating Defender and bundled Bane as separate properties</td></tr>
+          <tr><td>Faenor claidhmore, +8 enchant, no other properties</td><td class="pos">CER 40 exact (perfect square) = claidhmore's confirmed natural baseline, not an error</td><td>No ASSESS available (forum listing)</td><td class="pos">Initially flagged as implausible/likely missing text — WRONG, retracted once the claidhmore's 40-point natural baseline was confirmed on GSWiki</td></tr>
+          <tr><td>Coraesine item, +30 enchant, no other properties</td><td class="pos">Remainder exactly 0</td><td>No ASSESS available (forum listing)</td><td class="pos">First independent confirmation of coraesine's -200 material value — shop isolation attempts had always come up empty on this material</td></tr>
+          <tr><td>Black alloy Twisted Shield, fully unlocked, +25, acid flare, E1</td><td class="pos">Remainder ~149 (within 1 pt of 150) when acid flare treated as bundled into script</td><td>No ASSESS available (forum listing)</td><td class="pos">First real black alloy sample all session (acid flare, not the Shadowdeath candidate); confirms Twisted Shield bundles its flare unlike Twisted Weapon</td></tr>
+          <tr><td>Greater somnis spear + xazkruvrixis weapon (2 items, Least Moods only flourish)</td><td class="pos">Both close to exact perfect squares (25=5², 49=7²) matching stated ground truth when Least Moods=0</td><td>CER 5 stated; "decently" stated</td><td class="pos">Least Moods CONFIRMED zero-cost — upgraded from "bounded ≤200 by elimination" to independently confirmed via two clean single-flourish items</td></tr>
+          <tr><td>Low steel Twin Weapon T2 kunai, +35, E5/S5, Holy Fire, psychic flare</td><td class="pos">Solves Twin Weapon T2 = 140 directly from a stated CER 20</td><td>CER 20 stated directly ("masterfully")</td><td class="pos">Corrects an earlier ~100/150 estimate; retroactively fits a second Twin Weapon T2 item (ghezyte kunai) better than the prior guess did</td></tr>
+          <tr><td>Ruic longbow, +35, E2/S5, Holy Fire, Phytomorphic Putrescence</td><td class="pos">Remainder exactly 0, confirms script = 200</td><td>No ASSESS available (forum listing)</td><td class="pos">SECOND independent zero-remainder confirmation — script upgraded from single-item guess to confirmed</td></tr>
+          <tr><td>Ghezyte targe, +35, dispel x2, E5/S5, Holy Fire, Throwable Shield</td><td class="pos">Remainder exactly 0, script solves to 200</td><td>No ASSESS available (forum listing)</td><td class="pos">Script identified by name after user follow-up; initially flagged as suspicious "phantom 200" with no visible source text</td></tr>
+          <tr><td>Mithril plate, +40, E5/S5, Holy Fire, Ethereal Armor fully unlocked, Dispel T3</td><td class="pos">CER 15 crit/10 dmg given directly; solves Ethereal Armor≈167 (assuming T3=3 dispel attempts)</td><td>CER 15 critical, CER 10 damage (both stated directly)</td><td class="pos">Replaces a baseless "caps at 140" placeholder; hinges on the T3=3-attempts dispel assumption</td></tr>
+          <tr><td>Shadarl Voln Armor T4, +50, E5/S5, Holy Fire</td><td class="pos">CER 8 exact (perfect square) using Voln T4=150</td><td>Stated "decently" critical — matches CER 8 exactly</td><td class="pos">Confirms Voln T3=T4=150, mirroring Elven Armor's known pattern; second independent confirmation of the corrected value</td></tr>
+          <tr><td>Ghezyte Twisted Weapon, fully unlocked+BOOSTED, +40, fire flare, E5/S5, Holy Fire</td><td class="pos">CER 11, ~30% to 12, matching "very heavily" only when the fire flare is charged separately (100) rather than bundled</td><td>Stated "very heavily" — matches exactly</td><td class="pos">Corrects an earlier assumption that Twisted Weapon bundles its own flare; base tier likely near 0, not 100</td></tr>
+          <tr><td>Faewood runestaff, +25, E5, Nerve Staff T3, Acuity T6, "occasionally focus" ability</td><td class="pos">Remainder within 1 pt of exact charging NOTHING for the focus ability</td><td>No ASSESS available (forum listing)</td><td class="pos">First isolation-quality confirmation of Acuity (15/tier) and Nerve Staff (150); reverses earlier suspicion that the "occasionally focus" ability carries real cost</td></tr>
+          <tr><td>Vethinye Splitter weapon, +50, E5/S5, Holy Fire, dispel x5, 4 flourishes</td><td class="pos">CER 22 exact (perfect square)</td><td>CER 22 (assess-word annotation + 700 services)</td><td class="pos">Exact — confirms flourishes take only the HIGHEST value, not a sum; confirms bare AS/DS-vs-undead with no Bane sentence is free</td></tr>
+          <tr><td>Vultite weapon, +40, E5/S5, Holy Fire, Stalwart Resilience</td><td class="pos">Script solved backward = 200; CER 6, 48-56% to 7</td><td>CER 6, 50% to 7</td><td class="pos">Exact</td></tr>
+          <tr><td>Low steel warsword, +50, S5, Holy Fire, extraplanar bane, psychic flare</td><td class="pos">CER 10 exact (only possible if psychic flare = free)</td><td>Stated "heavily" — no exact ASSESS given, but the alternative (charging 100 for the flare) is mathematically impossible</td><td class="pos">Resolved a prior open question (5th inherent-flare material)</td></tr>
+          <tr><td>Vethinye/starsong Clockwerke claidhmore, +40</td><td class="pos">CER ~41, ~23% to 42 (claidhmore's confirmed 40-pt baseline + 1 added point), using Clockwerke T2=150 (assumed, tier not stated in text)</td><td>N/A — no CER given, but result is internally coherent with claidhmore baseline</td><td class="pos">Long-unresolved item finally solved once identified as a claidhmore; Clockwerke's exact tier still unconfirmed</td></tr>
+          <tr><td>Glaes shield, +50, E5/S5, Holy Fire, Animalistic Spirit, Warding Flares +35(10s)</td><td class="pos">Remainder exactly 200 — no WPS stated, Warding Flares solves to flat 200 regardless of tier</td><td>No ASSESS available (forum listing)</td><td class="pos">Internally exact (zero WPS remainder); supersedes an earlier much shakier ~104 estimate for a different Warding Flares tier</td></tr>
+          <tr><td>Vultite ono, +20, Briar T1, no other properties</td><td class="pos">Remainder exactly 70 — no WPS stated, confirms Briar T1 = 70 exact</td><td>No ASSESS available (forum listing)</td><td class="pos">Internally exact; casts doubt on Briar T3=200 (two prior T3 items failed to close cleanly — T3 may not follow a simple 70/100/200 progression)</td></tr>
+          <tr><td>Vultite Forest Armor T1, +25, Perception Ranks +1 (not unlocked), no WPS stated</td><td class="pos">Remainder exactly 70 — confirms Forest Armor T1 = 70 exact, and confirms "not unlocked" rank enhancive = 0</td><td>No ASSESS available (forum listing)</td><td class="pos">Internally exact; material (vultite=0) removed all ambiguity</td></tr>
+          <tr><td>Xazkruvrixis weapon, +50, E1/S5, Holy Fire, death flare, unknown script</td><td class="pos">CER 16 exact (assuming script=200, solves material=-250)</td><td>CER 16</td><td class="pos">CER matches; material value inferred, not independently confirmed</td></tr>
+          <tr><td>Golvern kidney shield, +30, E5/S4, Size Changing Shield</td><td class="pos">Remainder exactly 200, no WPS stated</td><td>Named via GSWiki (Size_changing_shield, Dec 2022) after user supplied the link</td><td class="pos">Script now confirmed by name; matches flat-200 family</td></tr>
+          <tr><td>Leather Forest Armor T4, +30, E1/S2, 4 rank enhancives (not unlocked)</td><td class="pos">CER 10, ~58-63% to 11 (resolved retroactively once Forest Armor's flat -70 was confirmed on the official table)</td><td>No ASSESS available; previously unsolvable</td><td class="pos">Confirms Forest Armor is flat across all tiers, not scaled like Elven Armor</td></tr>
+        </table>
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Note: this case also introduced two untested assumptions — (1) enhancives with no stated "trained N times" clause are treated as req=0, and (2) consumable poison coatings (e.g. "coated with N charges of X poison") are treated as non-contributing, since they're an applied consumable rather than a structural item property. Neither has an ASSESS-confirmed test yet.
+        <p style="font-size:11px;color:var(--ink-faint);margin-top:4px;">This case initially failed badly (naive deduction gave CER 14) because the item text "It has some unknown (scripted) benefit" was not detected — that phrase is standard boilerplate for ANY Category D script and does not mean unidentifiable; it means "look up the script's difficulty separately." Once Parasite (flat 200, confirmed via GSWiki's Leafiara Mechanical Musings page, applies at all tiers) was supplied, the deduction matched exactly. See the "unidentified script" warning above — always check for this phrase before trusting a CER result.</p>
+        <div class="refs-list">
+          <p>References</p>
+          <ul>
+            <li><a href="https://gswiki.play.net/Weighting,_Padding,_Sighting" target="_blank">GSWiki: Weighting, Padding, Sighting</a></li>
+            <li><a href="https://gswiki.play.net/Padding" target="_blank">GSWiki: Padding</a></li>
+            <li><a href="https://gswiki.play.net/User:ZHEPHEN" target="_blank">GSWiki User:ZHEPHEN</a> (unofficial player research, 2020 — used only for the optional enhancive estimate)</li>
+            <li><a href="https://gswiki.play.net/Category:Armor_item_scripts" target="_blank">GSWiki: Category:Armor item scripts</a></li>
+            <li><a href="https://gswiki.play.net/Leafiara_(prime)/Mechanical_Musings/Order_of_Operations:_Servicing_Gear" target="_blank">GSWiki: Leafiara's Mechanical Musings — Order of Operations</a> (flat-200 script family)</li>
+          </ul>
+        </div>
+      </details>
+
+      <footer class="page-footer">
+        This tool infers CER from stated difficulty; it does not replace an in-game ASSESS / WARRIOR ASSESS. Parsing is best-effort — always confirm the extracted fields.
+      </footer>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('dateline').textContent = new Date().toLocaleDateString('en-US', {year:'numeric', month:'long', day:'numeric'});
+
+// ---- Material Gear Difficulty Modifier table (GSWiki, "Weighting, Padding, Sighting", last edited Nov 19 2024) ----
+const MATERIAL_MODS = {
+  "adamantine": -150, "aganjira lesser": -60, "aganjira greater": -150, "alexandrite": -500,
+  "black alloy": 0, "bone": -250, "bronze": -50, "carmiln": 10, "cloth": 0, "copper": -50,
+  "coraesine": -200, "deringo": -20, "drakar": -50, "drake": 0, "eahnor": 15, "eonake": 20,
+  "faenor": 15, "faewood": 0, "feras": 0, "fireleaf": 15, "firewheel": -35, "ghezyte": -50,
+  "glaes": -10, "glass": 0, "glowbark": -10, "golvern": -10, "gornar": -50, "high steel": 0,
+  "hoarbeam": 5, "illthorn": 0, "imflass": -30, "invar": 0, "ipantor": -40, "iron": -30,
+  "ironwood": 0, "kakore": 0, "kelyn": 0, "krodera": -100, "kroderine": -100, "lathonian": -100,
+  "leather": -10, "lor": -25, "low steel": 0, "mein": -10, "mesille": 0, "mithglin": 15,
+  "mithril": 20, "modwir": 0, "mossbark": 0, "obsidian": -500, "ora": 0, "ora black": -75,
+  "black ora": -75, "ora white": 0, "white ora": 0, "orase": 0, "razern": -20, "rhimar": -50,
+  "rolaren": -40, "rowan": 20, "ruby": -500, "ruic": -60, "sephwir": -25, "shadarl": -100,
+  "silver": -500, "somnis": -150, "steel": -10, "stone": -500, "surita lesser": -100,
+  "surita greater": -250, "urglaes": -999, "urnon": -999, "vaalorn": 10, "veil iron": -50,
+  "vethinye": -150, "villswood": 0, "vultite": 0, "white alloy": 0, "witchwood": -75,
+  "wood": -100, "wood (shield/bow/runestaff)": -10, "wyrwood": -60, "yew": -20, "zelnorn": -250, "zorchar": -50,
+  "purified adamantine": -150, "xazkruvrixis": -250 /* INFERRED, not in official table — solved jointly with an assumed flat-200 script against a real CER 16, not independently confirmed */
+};
+
+// Materials with a confirmed INHERENT flare — the flare is already priced into the material
+// modifier above, so the +100 flare charge should NOT also be applied WHEN the flare's element
+// matches the material's own type (a mismatched flare, e.g. an ice flare bolted onto a zorchar
+// item, is NOT free — confirmed via live isolation on black ora, which does not get a free
+// flare of arbitrary type despite having a material modifier).
+// All four confirmed via live isolation on shop data (July 2026):
+//   gornar (vibration/earth), zorchar (lightning), drakar (fire), rhimar (cold)
+// GSWiki's Drakar page (last edited Feb 22, 2026) independently states these same four are
+// "one of four materials that has an enchant bonus similar to mithril and this natural
+// flaring property" — matches our empirical result exactly.
+// Low steel (psychic — "mind-shattering psychic energy") confirmed via a real ASSESS-adjacent
+// user-submitted item: the alternative (charging the standard 100 for the flare) produced an
+// impossible zero remainder against a stated nonzero "heavily weighted" property, while treating
+// it as free produced a clean perfect-square CER 10 exactly matching "heavily." Fifth confirmed.
+// Coraesine (vacuum/air) is documented on GSWiki's Category:Flares page as inherent but not
+// yet isolated by us.
+// Ghezyte's "intimidation" effect: confirmed a Category A (inherent material) property per
+// GSWiki's Ghezyte page, the same category as adamantine's anti-magic or high steel's anti-fade
+// abilities, which the wiki states are "likely to have their special abilities as an inherent
+// property" (i.e., free, priced into the material modifier already). LIKELY FREE, same as the
+// other 7 below. The real caveat: per GM Leafiara (Discord, Jan 2023), ghezyte is the ONE
+// material whose inherent ability does NOT occupy the flare (Category B) slot — every other
+// material here (gornar/zorchar/drakar/rhimar/xazkruvrixis/vethinye) DOES occupy that slot,
+// so isolating them cleanly just means checking for "no other Cat B flare." A ghezyte item can
+// ALSO carry a real, separately-priced flare alongside the free intimidation effect — don't
+// mistake a stacked flare's cost for an intimidation surcharge that doesn't actually exist.
+const INHERENT_FLARE_MATERIALS = ["gornar", "zorchar", "drakar", "rhimar", "low steel", "xazkruvrixis", "vethinye"];
+const INHERENT_FLARE_TYPES = { gornar: "vibration/earth", zorchar: "lightning", drakar: "fire", rhimar: "cold", "low steel": "psychic", xazkruvrixis: "death", vethinye: "disruption (starsong)" };
+const GHEZYTE_INTIMIDATION_NOTE = "Ghezyte's intimidation effect is a Category A property (like adamantine anti-magic / high steel anti-fade) and very likely free, already priced into ghezyte's material modifier. Unlike the other inherent-flare materials, ghezyte's ability does NOT occupy the flare slot, so a separate real flare can also be present and would need its own charge — check for that before assuming a ghezyte item's full remainder is unexplained.";
+
+const ASSESS_WORDS = [
+  [1,2,"Lightly"], [3,4,"Fairly"], [5,6,"Somewhat"], [7,8,"Decently"], [9,10,"Heavily"],
+  [11,13,"Very heavily"], [14,15,"Exceptionally"], [16,20,"Masterfully"], [21,25,"Superbly"],
+  [26,30,"Expertly"], [31,35,"Phenomenally"], [36,40,"Fantastically"], [41,45,"Incredibly"],
+  [46,50,"Wondrously"]
+];
+// Negative ("diminished") bands. UNOFFICIAL — GSWiki's Verb:ASSESS/saved posts states directly
+// that GM Zissu declined to publish exact negative thresholds ("Player estimates of current
+// value correlations are based on player research"). The mechanic itself IS confirmed real
+// (negative padding causes extra damage/worse criticals), just not these specific cutoffs.
+// Extremely unlikely to matter for ordinary secondary-market items — nobody buys/sells
+// intentionally-cursed diminished gear — included for completeness, not because it's expected
+// to come up.
+const DIMINISHED_WORDS = [
+  [-5,-1,"Slightly diminished"], [-10,-6,"Somewhat diminished"],
+  [-15,-11,"Noticeably diminished"], [-999,-16,"Substantially diminished"]
+];
+
+function normMat(m) {
+  if (!m) return null;
+  let s = m.toLowerCase().trim();
+  s = s.replace(/^purified\s+/, '');
+  s = s.replace(/\s+of\s+\w+\s+quality$/, '');
+  return s;
+}
+
+function assessWordFor(cer) {
+  if (cer === 0) return "No weighting (baseline)";
+  if (cer < 0) {
+    for (const [lo, hi, word] of DIMINISHED_WORDS) {
+      if (cer >= lo && cer <= hi) return word + " (unofficial threshold estimate)";
+    }
+    return "Diminished (unofficial threshold estimate)";
+  }
+  for (const [lo, hi, word] of ASSESS_WORDS) {
+    if (cer >= lo && cer <= hi) return word;
+  }
+  return cer < 1 ? "Unpadded / negligible" : "Off scale (50+)";
+}
+
+function parseRaw(text) {
+  const out = {};
+  const diffMatch = text.match(/It is an? [a-zA-Z\- ]+ project \((\d+)\s*difficulty\)/i);
+  if (diffMatch) out.difficulty = parseInt(diffMatch[1]);
+
+  const matMatch = text.match(/predominantly crafted of ([a-zA-Z ,]+?)[\.\,]/i) ||
+                    text.match(/crafted out of ([a-zA-Z ,]+?)[\.\,]/i);
+  if (matMatch) out.material = matMatch[1].trim();
+
+  const enchMatch = text.match(/imparts a bonus of \+?(\d+)/i);
+  if (enchMatch) out.enchant = parseInt(enchMatch[1]);
+
+  let resTotal = 0;
+  const resMatches = [...text.matchAll(/resistant \((\d+)%\)/gi)];
+  resMatches.forEach(m => resTotal += parseInt(m[1]));
+  if (resTotal > 0) out.resist = resTotal;
+
+  const ensMatch = text.match(/ensorcelled (\d+) times?/i);
+  if (ensMatch) out.ensorcell = parseInt(ensMatch[1]);
+
+  const sanMatch = text.match(/sanctified (\d+) times?/i);
+  if (sanMatch) out.sanctify = parseInt(sanMatch[1]);
+  out.holyFire = /permanent Holy Fire flares/i.test(text);
+
+  out.bane = /\bbane\b/i.test(text);
+  out.holy = /\bIt is a holy item\b/i.test(text);
+  out.unknownScript = /unknown \(scripted\) benefit|unidentified (scripted )?(benefit|ability|effect)/i.test(text);
+
+  const critWordPad = text.match(/It is ([a-zA-Z\- ]+?) padded against critical blows/i);
+  const dmgWordPad = text.match(/It is ([a-zA-Z\- ]+?) padded against damage blows/i) ||
+                  text.match(/It is ([a-zA-Z\- ]+?) padded to lessen the damage/i);
+  const genericPad = /padded to lessen the damage the wearer takes, but exactly how much requires assessment/i.test(text) && !/temporarily/i.test(text.match(/.{0,20}padded to lessen/i)?.[0] || '');
+
+  const critWordWeight = text.match(/It is ([a-zA-Z\- ]+?) weighted to inflict more critical wounds/i);
+  const dmgWordWeight = text.match(/It is ([a-zA-Z\- ]+?) weighted to inflict more damage/i);
+  const genericWeight = /weighted to inflict more critical wounds.{0,30}exactly how much requires assessment/i.test(text) && !/temporarily/i.test(text.match(/.{0,20}weighted to inflict/i)?.[0] || '');
+
+  const critWord = critWordPad || critWordWeight;
+  const dmgWord = dmgWordPad || dmgWordWeight;
+  out.wpsTerm = (critWordWeight || dmgWordWeight || genericWeight) ? 'weighted' : 'padded';
+
+  if (critWord && dmgWord) out.padtype = 'both';
+  else if (critWord) out.padtype = 'crit';
+  else if (dmgWord || genericPad || genericWeight) out.padtype = 'dmg';
+  else out.padtype = 'none'; // explicit, so a prior item's leftover value never carries over
+
+  const enhReqs = [...text.matchAll(/not\s+trained\s+(\d+)\s+times/gi)].map(m => parseInt(m[1]));
+  if (enhReqs.length) out.enhancives = enhReqs;
+
+  // Named-script auto-detection: these scripts identify themselves explicitly in the text
+  // rather than using the generic "unknown (scripted) benefit" boilerplate, so they need
+  // their own detection or the script picker never appears at all.
+  const namedScripts = [
+    { re: /Daybringer\s*\/\s*Nightbringer Weapon/i, value: '200', label: 'Daybringer/Nightbringer' },
+    { re: /It is a Blink Weapon/i, value: '200', label: 'Blink Weapon' },
+    { re: /It is a Parasite (Armor|Weapon)/i, value: '200', label: 'Parasite' },
+    { re: /This armor is at unlock level|Flare Chance Tree/i, value: '200', label: 'Ithzir Armor' },
+    { re: /gears, cogs, and shafts link a series of tightly overlapping plates/i, value: '200', label: 'Size Changing Shield' },
+    { re: /Phytomorphic Putrescence/i, value: '200', label: 'Phytomorphic Putrescence' },
+    { re: /briar flare weapon.{0,20}tier 1/i, value: '70', label: 'Briar Flares T1' },
+    { re: /briar flare weapon.{0,20}tier 2/i, value: '100', label: 'Briar Flares T2' },
+    { re: /briar flare weapon.{0,20}tier 3/i, value: '200', label: 'Briar Flares T3' },
+    { re: /It is an? Animalistic Spirit/i, value: '200', label: 'Animalistic Spirit' },
+    { re: /Sigil Staff.{0,20}[Tt]ier 5|T5 Sigil/i, value: '200', label: 'Sigil Staff T5' },
+    { re: /Stalwart Resilience flare/i, value: '200', label: 'Stalwart Resilience' },
+    { re: /Banshee.s Ward flare/i, value: '200', label: "Banshee's Ward" },
+    { re: /Forest Armor.{0,300}TIER 1/i, value: '70', label: 'Forest Armor T1' },
+    { re: /It is a Twisted Weapon/i, value: '0', label: 'Twisted Weapon base/T0' },
+    { re: /Twisted Shield/i, value: '150', label: 'Twisted Shield T3/fully unlocked' },
+    { re: /It is a Splitter Weapon|\(SPLITTER\)/i, value: '200', label: 'Splitter Weapon' },
+    { re: /tier 3 Energy shield/i, value: '200', label: 'Energy Shield T3' },
+    { re: /Clockwerke Weapon/i, value: '150', label: 'Clockwerke Weapon T2' }
+  ];
+  for (const s of namedScripts) {
+    if (s.re.test(text)) { out.namedScript = s; break; }
+  }
+
+  // Flare detection: known loresong phrases (elemental, disruption, grapple, dispel, mana,
+  // vacuum/dark, death, psychic, disintegration, acid) confirmed via GSWiki Category:Flares
+  // and live isolation research. This does NOT cover every possible flare phrasing —
+  // anything matched here is a strong signal a flare is present, but absence of a match
+  // is NOT proof there isn't one; always re-check the raw text yourself.
+  const flarePatterns = [
+    /power of a fire elemental/i, /power of an ice elemental/i, /power of a flaming substance/i,
+    /power of a lightning bolt/i, /power of an earth elemental/i, /power of a corrosive substance/i,
+    /power of a dark substance/i, /power of a strange anti-magical substance/i,
+    /a disrupting substance/i, /a grappling force/i, /infused with death/i,
+    /mind-shattering psychic energy/i, /a disintegrating substance/i, /infused with mana/i
+  ];
+  out.flareDetected = flarePatterns.some(p => p.test(text));
+  out.dispelMatch = text.match(/anti-magical substance \((\d+) dispel attempts?\)/i);
+
+  // Store WHICH properties were textually detected, not pre-built warning strings —
+  // renderUnaccountedBanner() re-checks these against LIVE field values every time it
+  // runs, so a warning clears itself once you actually fill in the field, instead of
+  // persisting forever regardless of what you've entered.
+  const textFlags = {};
+  const tdMatch = text.match(/protects against magical attacks with a bonus of (\d+)/i);
+  textFlags.tdMentioned = !!tdMatch;
+  textFlags.tdMentionedNoNumber = /protects against magical attacks\b(?!\s+with a bonus)/i.test(text);
+  if (tdMatch) out.tdValue = parseInt(tdMatch[1]);
+
+  const defMatch = text.match(/helps defend its wielder with a bonus of (\d+)/i);
+  textFlags.defenderMentioned = !!defMatch;
+  textFlags.defenderMentionedNoNumber = /helps defend its wielder\b(?!\s+with a bonus)/i.test(text);
+  if (defMatch) out.defenderValue = parseInt(defMatch[1]);
+  textFlags.enhancivesMentioned = /It is an enhancive item/i.test(text);
+  textFlags.baneLikely = /inflicts more fearsome wounds|provides additional defensive benefits|provides an additional \+\d+ (AS|DS) bonus/i.test(text);
+  textFlags.imbedded = /imbedded|embedded/i.test(text);
+  textFlags.magicResistantNoPct = /magic resistant\b/i.test(text) && !/resistant \(\d+%\)/i.test(text);
+  textFlags.occasionallyAbility = /occasionally (focus|invoke|trigger|call upon)/i.test(text);
+  textFlags.isClaidhmore = /claidhmore/i.test(text);
+  textFlags.isKatana = /katana/i.test(text);
+  textFlags.isRunestaff = /runestaff|rune staff|nervestaff|nerve staff/i.test(text);
+  textFlags.flareDetected = out.flareDetected;
+  textFlags.flareUnrecognized = !out.flareDetected && /infused with|power of|substance|flare/i.test(text) && !/temporarily|temporary/i.test(text.match(/.{0,30}(infused with|power of)/i)?.[0] || '');
+  out.textFlags = textFlags;
+  out.isKatana = textFlags.isKatana;
+  out.isRunestaff = textFlags.isRunestaff;
+
+  return out;
+}
+
+function fillFields(p) {
+  if (p.difficulty !== undefined) document.getElementById('f_difficulty').value = p.difficulty;
+  if (p.material) document.getElementById('f_material').value = p.material;
+  if (p.enchant !== undefined) document.getElementById('f_enchant').value = p.enchant;
+  if (p.resist !== undefined) document.getElementById('f_resist').value = p.resist;
+  if (p.ensorcell !== undefined) document.getElementById('f_ensorcell').value = p.ensorcell;
+  if (p.sanctify !== undefined) document.getElementById('f_sanctify').value = p.sanctify;
+  if (p.holyFire) document.getElementById('f_holyFire').checked = true;
+  if (p.bane) document.getElementById('f_bane').checked = true;
+  if (p.dispelMatch) document.getElementById('f_flares').value = 1;
+  else if (p.flareDetected) document.getElementById('f_flares').value = 1;
+  if (p.holy) document.getElementById('f_holy').checked = true;
+  if (p.unknownScript) { document.getElementById('f_unknownScript').checked = true; toggleScriptGuess(); }
+  if (p.isKatana) document.getElementById('f_katanaBase').checked = true;
+  if (p.tdValue !== undefined) document.getElementById('f_td').value = p.tdValue;
+  if (p.defenderValue !== undefined) document.getElementById('f_defender').value = p.defenderValue;
+  if (p.namedScript) {
+    document.getElementById('f_unknownScript').checked = true;
+    toggleScriptGuess();
+    document.getElementById('f_scriptSearch').value = p.namedScript.label.split(' — ')[0].split(' (confirmed')[0];
+    document.getElementById('f_scriptCustom').value = p.namedScript.value;
+    toggleScriptGuess();
+  }
+  if (p.padtype) document.getElementById('f_padtype').value = p.padtype;
+  if (p.enhancives) document.getElementById('f_enhancives').value = p.enhancives.join(', ');
+}
+
+function clearAll() {
+  document.getElementById('rawText').value = '';
+  document.getElementById('unaccountedBanner').innerHTML = '';
+  window.__textFlags = {};
+  window.__wpsTerm = 'padded';
+  document.querySelectorAll('.field.needs-attention').forEach(el => el.classList.remove('needs-attention'));
+  document.getElementById('confirmSummaryNote').textContent = '';
+  document.getElementById('confirmDetails').open = false;
+  document.getElementById('confirmDetails').classList.remove('panel-needs-attention');
+  const confirmPanel = document.getElementById('confirmDetails').closest('section.table-panel');
+  if (confirmPanel) confirmPanel.classList.remove('panel-needs-attention');
+  ['f_difficulty','f_material','f_enchant','f_resist','f_td','f_defender','f_ensorcell','f_sanctify','f_flares','f_enhancives','f_rankEnhList','f_flourish']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_bareUndeadBonus').checked = false;
+  document.getElementById('f_isWeapon').checked = false;
+  document.getElementById('f_useRankLookup').checked = false;
+  document.getElementById('f_bane').checked = false;
+  document.getElementById('f_gub').checked = false;
+  document.getElementById('f_holy').checked = false;
+  document.getElementById('f_holyFire').checked = false;
+  document.getElementById('f_katanaBase').checked = false;
+  document.getElementById('f_unknownScript').checked = false;
+  document.getElementById('f_scriptSearch').value = '';
+  document.getElementById('f_scriptCustom').value = '';
+  document.getElementById('scriptMatchNote').textContent = '';
+  document.getElementById('scriptGuessWrap').style.display = 'none';
+  document.getElementById('scriptCustomWrap').style.display = 'none';
+  document.getElementById('f_useEnhFormula').checked = false;
+  document.getElementById('f_padtype').value = 'none';
+  document.getElementById('ledgerHost').innerHTML = '<div class="empty-state">Paste an item and click "Assay item" to build the ledger.</div>';
+  document.getElementById('verdictHost').innerHTML = '';
+}
+
+function runAssay() {
+  const raw = document.getElementById('rawText').value;
+  window.__textFlags = {};
+  window.__wpsTerm = 'padded';
+  if (raw.trim()) {
+    const parsed = parseRaw(raw);
+    fillFields(parsed);
+    window.__textFlags = parsed.textFlags || {};
+    window.__wpsTerm = parsed.wpsTerm || 'padded';
+  }
+  renderUnaccountedBanner();
+  compute();
+}
+
+function setFieldAttention(fieldId, shouldHighlight) {
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  const container = el.closest('.field');
+  if (!container) return;
+  container.classList.toggle('needs-attention', shouldHighlight);
+}
+
+// Re-derives warnings EVERY time it's called, checking current field values —
+// a property mentioned in the text but since filled in will no longer warn.
+function renderUnaccountedBanner() {
+  const host = document.getElementById('unaccountedBanner');
+  const flags = window.__textFlags || {};
+  const warnings = [];
+  const attentionFields = [];
+
+  const tdVal = parseFloat(document.getElementById('f_td').value) || 0;
+  const tdNeedsAttn = flags.tdMentionedNoNumber || (flags.tdMentioned && tdVal === 0);
+  setFieldAttention('f_td', tdNeedsAttn);
+  if (flags.tdMentionedNoNumber) { warnings.push('WARNING: text says "protects against magical attacks" with NO stated bonus number — confirmed to sometimes be missed by shop-database structured fields entirely. Get the exact bonus from the full text/ASSESS before trusting any deduction on this item.'); attentionFields.push('Target Defense'); }
+  else if (flags.tdMentioned && tdVal === 0) { warnings.push('Text mentions "protects against magical attacks" (TD bonus) — enter it in the Target Defense field above, it is not auto-filled.'); attentionFields.push('Target Defense'); }
+
+  const defVal = parseFloat(document.getElementById('f_defender').value) || 0;
+  const defNeedsAttn = flags.defenderMentionedNoNumber || (flags.defenderMentioned && defVal === 0);
+  setFieldAttention('f_defender', defNeedsAttn);
+  if (flags.defenderMentionedNoNumber) { warnings.push('WARNING: text says "helps defend its wielder" with NO stated bonus number — confirmed to sometimes be missed by shop-database structured fields entirely. Get the exact bonus before trusting any deduction on this item.'); attentionFields.push('Defender'); }
+  else if (flags.defenderMentioned && defVal === 0) { warnings.push('Text mentions "helps defend its wielder" (Defender/DS bonus) — enter it in the Defender field above, it is not auto-filled.'); attentionFields.push('Defender'); }
+
+  const enhVal = document.getElementById('f_enhancives').value.trim();
+  const enhNeedsAttn = flags.enhancivesMentioned && !enhVal;
+  setFieldAttention('f_enhancives', enhNeedsAttn);
+  if (enhNeedsAttn) { warnings.push('Text says "It is an enhancive item" — enter the enhancive level requirements above, they are not auto-filled into the subtotal.'); attentionFields.push('Enhancives'); }
+
+  const baneChecked = document.getElementById('f_bane').checked;
+  const gubChecked = document.getElementById('f_gub').checked;
+  const baneNeedsAttn = flags.baneLikely && !baneChecked && !gubChecked;
+  setFieldAttention('f_bane', baneNeedsAttn);
+  if (baneNeedsAttn) { warnings.push('Text suggests a Bane or bundled Bane package — check the Bane/bundled-Bane checkboxes above, they are not auto-detected.'); attentionFields.push('Bane'); }
+
+  const flareVal = parseFloat(document.getElementById('f_flares').value) || 0;
+  const flareNeedsAttn = (flags.flareDetected || flags.flareUnrecognized) && flareVal === 0;
+  setFieldAttention('f_flares', flareNeedsAttn);
+  if (flags.flareDetected && flareVal === 0) { warnings.push('A known flare phrase was detected in the text but the flare count above is 0 — double check.'); attentionFields.push('Flares'); }
+  if (flags.flareUnrecognized && flareVal === 0) { warnings.push('Text contains flare-like language ("infused with", "power of", "substance") that did NOT match a known confirmed pattern — check manually whether a flare is present and its likely type/cost.'); attentionFields.push('Flares'); }
+
+  if (flags.imbedded) warnings.push('WARNING: text mentions an "imbedded/embedded" spell charge — a distinct mechanic never priced anywhere in this tool. Treat any deduction on this item as unreliable until investigated.');
+  if (flags.magicResistantNoPct) warnings.push('WARNING: text says "magic resistant" with no stated percentage — a real property this tool cannot price.');
+  if (flags.occasionallyAbility) warnings.push('NOTE: text describes an "occasionally [does X]" ability — this usually just describes an Acuity flare (5 AS/3 CS per tier); price it via the Acuity flare field above rather than treating it as free-floating.');
+  if (flags.isClaidhmore) warnings.push('This is a CLAIDHMORE — natural inherent 40 CER critical weighting baseline (up to 50 for legendary examples). A large computed CER is expected here, not necessarily an error.');
+  if (flags.isRunestaff) warnings.push('This is a RUNESTAFF — staves cannot carry weighting (melee-only), sighting (ranged-only), or padding (armor-only). Any remainder belongs entirely to the script or another unaccounted property, NEVER to a CER. If "Padding type" is set to anything other than none, that setting is wrong for this item.');
+  const katanaNeedsAttn = flags.isKatana && !document.getElementById('f_katanaBase').checked;
+  setFieldAttention('f_katanaBase', katanaNeedsAttn);
+  if (katanaNeedsAttn) { warnings.push('This is a KATANA — check the katana baseline box above (confirmed inherent 10 CER critical weighting, contributing 100 to difficulty).'); attentionFields.push('Katana baseline'); }
+
+  const summaryNote = document.getElementById('confirmSummaryNote');
+  const details = document.getElementById('confirmDetails');
+  const parentPanel = details.closest('section.table-panel');
+  if (attentionFields.length) {
+    summaryNote.textContent = `(${attentionFields.length} need${attentionFields.length===1?'s':''} attention: ${attentionFields.join(', ')})`;
+    details.open = true; // auto-expand when something needs a look; never force-closed
+    details.classList.add('panel-needs-attention');
+    if (parentPanel) parentPanel.classList.add('panel-needs-attention');
+  } else {
+    summaryNote.textContent = '';
+    details.classList.remove('panel-needs-attention');
+    if (parentPanel) parentPanel.classList.remove('panel-needs-attention');
+  }
+
+  if (!warnings.length) { host.innerHTML = ''; return; }
+  host.innerHTML = `<div class="verdict-panel conf-unreliable" style="margin-bottom:14px;">
+    <div class="caveats-title" style="color:#d4886f;">CHECK BEFORE TRUSTING THE LEDGER BELOW</div>
+    <ul>${warnings.map(w => `<li style="font-size:12.5px;color:var(--ink-dim);margin-bottom:5px;">${w}</li>`).join('')}</ul>
+  </div>`;
+}
+
+// Live recompute: editing any Confirm Properties field updates the ledger and
+// banner immediately, without needing to re-click "Assay item."
+const LIVE_FIELDS = ['f_difficulty','f_material','f_woodCategory','f_enchant','f_resist','f_td','f_defender',
+  'f_ensorcell','f_sanctify','f_holyFire','f_flares','f_flourish',
+  'f_katanaBase','f_bareUndeadBonus','f_bane','f_gub','f_enhancives','f_isWeapon',
+  'f_useEnhFormula','f_rankEnhList','f_useRankLookup','f_padtype','f_unknownScript','f_scriptSearch','f_scriptCustom'];
+LIVE_FIELDS.forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const evt = (el.tagName === 'SELECT' || el.type === 'checkbox') ? 'change' : 'input';
+  el.addEventListener(evt, () => {
+    if (document.getElementById('f_difficulty').value.trim() !== '') {
+      renderUnaccountedBanner();
+      compute();
+    }
+  });
+});
+
+// Script database: name -> {value, note}. Populates the searchable datalist below and
+// is looked up directly by exact (case-insensitive) name match as the user types.
+const SCRIPT_DB = {
+  "Animalistic Spirit Weapon/Shield/Armor": {v:200, note:"Confirmed via multiple real ASSESS-validated items."},
+  "Banshee's Ward": {v:200, note:"Base tier (+10) confirmed exact zero-remainder. Scaling to higher bonus tiers untested."},
+  "Blink Weapon": {v:200, note:"Confirmed via real ASSESS-validated item (exact CER 5 match)."},
+  "Bubble Flares (Stalwart Resilience)": {v:200, note:"Solved backward from a real ASSESS-validated item."},
+  "Chronomage Flares": {v:200, note:"Unconfirmed, from official table."},
+  "Combat Flourish: Flare Affinity": {v:200, note:"Confirmed weapon-applicable via GSWiki category tags + GM posts. Value assumed to match Lore Flares family."},
+  "Combat Flourish: Lore Flares": {v:200, note:"Confirmed via real item (Sigil Staff), and again via a Splitter Weapon item."},
+  "Combat Flourish: RageArmor": {v:200, note:"Unconfirmed individually, assumed to match Lore Flares family."},
+  "Cursed Armor": {v:200, note:"Unconfirmed, from official table."},
+  "Daybringer/Nightbringer": {v:200, note:"Confirmed via real ASSESS-validated item (exact CER 5 match)."},
+  "Energy Runestaff": {v:200, note:"Unconfirmed, from official table."},
+  "Ethereal String": {v:200, note:"Real named script (GSWiki, thrown-weapon returner ability). Solved via item where it uniquely pinned an exact crit/damage split."},
+  "Ithzir Armor": {v:200, note:"Confirmed against a real ASSESS-validated item."},
+  "Size Changing Shield": {v:200, note:"Named via GSWiki (Dec 2022), solved via zero-WPS item closing exactly to 200."},
+  "Phytomorphic Putrescence": {v:200, note:"Confirmed via TWO independent zero-WPS items closing exactly (Duskruin Aug 2025)."},
+  "Throwable Shield": {v:200, note:"Named script confirmed (GSWiki), solved via zero-WPS item closing exactly to 200."},
+  "Karma Armor": {v:200, note:"Unconfirmed, from official table."},
+  "Parasite Armor": {v:200, note:"Confirmed against a real ASSESS-validated item."},
+  "Parasite Weapon": {v:200, note:"Includes bone material penalty per official table."},
+  "Returning Weapon (Hurl)": {v:200, note:"Unconfirmed, from official table."},
+  "Splitter Weapon": {v:200, note:"Confirmed via real ASSESS-validated item (perfect square match)."},
+  "Sprite Weapon/Armor": {v:200, note:"Unconfirmed, from official table."},
+  "Bloodtooth Bracers": {v:100, note:"Unconfirmed, from official table."},
+  "Chainspear": {v:150, note:"Unconfirmed, from official table."},
+  "Ethereal Tattoo Weapon": {v:100, note:"Unconfirmed, from official table."},
+  "Elemental Gloves": {v:70, note:"Unconfirmed, from official table."},
+  "Greater Elemental Flares": {v:150, note:"Unconfirmed, from official table."},
+  "Grobey Shield": {v:70, note:"Unconfirmed, from official table."},
+  "Hinged Armor": {v:10, note:"Unconfirmed, from official table."},
+  "Knockout Flares": {v:150, note:"Unconfirmed, from official table."},
+  "Nerve Staff": {v:150, note:"Confirmed via official table + validated via isolated item (closed within 1 pt alongside Acuity T6). A T6 item suggested this may actually scale by tier (T3=150, T6 needed +90 more) — treat with some caution at higher tiers."},
+  "Morphing Armor": {v:100, note:"Unconfirmed, from official table."},
+  "Poison Weapon": {v:70, note:"Unconfirmed, from official table."},
+  "Polearm Flares": {v:100, note:"Unconfirmed, from official table."},
+  "Pure Black Ora Weapon (Iasha)": {v:70, note:"Unconfirmed, from official table."},
+  "Pure White Ora Weapon (Iasha)": {v:70, note:"Unconfirmed, from official table."},
+  "Returning Weapon (Disarm)": {v:70, note:"Unconfirmed, from official table."},
+  "Self-mana Armor": {v:40, note:"Unconfirmed, from official table."},
+  "Shell Armor": {v:40, note:"Unconfirmed, from official table."},
+  "Snake Flares": {v:100, note:"Unconfirmed, from official table."},
+  "Wand Bow": {v:150, note:"Unconfirmed, from official table."},
+  "Realm Weapon": {v:100, note:"200 including the flare itself, per official table."},
+  "Briar Flares T1": {v:70, note:"Confirmed exact via a clean isolated item with no other properties."},
+  "Briar Flares T2": {v:100, note:"Unconfirmed, from official table."},
+  "Briar Flares T3": {v:200, note:"Confirmed via official table (Nov 2024): T1/T2/T3 = 70/100/200 exactly."},
+  "Fighting Knife T1": {v:70, note:"Unconfirmed, from official table."},
+  "Fighting Knife T2": {v:60, note:"Unconfirmed, from official table."},
+  "Fighting Knife T3": {v:140, note:"Unconfirmed, from official table."},
+  "Fighting Knife T4": {v:200, note:"Unconfirmed, from official table."},
+  "Forest Armor (all tiers)": {v:70, note:"Flat across ALL tiers — confirmed via official table AND 2 clean isolated T1 items. NOT tiered like Elven Armor."},
+  "Fusion Arms (1 slot)": {v:25, note:"Official table."},
+  "Fusion Arms (2 slots)": {v:75, note:"Official table."},
+  "Fusion Arms (3 slots)": {v:140, note:"Official table."},
+  "Fusion Arms (4 slots)": {v:225, note:"Official table."},
+  "Fusion Arms (5 slots)": {v:325, note:"Official table."},
+  "Fusion Arms (6 slots)": {v:450, note:"Official table."},
+  "Globus Elanthias T1-T3": {v:40, note:"Unconfirmed, from official table."},
+  "Globus Elanthias T4": {v:100, note:"Confirmed via a real zero-WPS item (Globus Naidem, a Globus Elanthias derivative)."},
+  "Mechanical Crossbow T1": {v:70, note:"Unconfirmed, from official table."},
+  "Mechanical Crossbow T2": {v:140, note:"Unconfirmed, from official table."},
+  "Mana-Infused Armor T0/T1": {v:70, note:"Unconfirmed, from official table."},
+  "Mana-Infused Armor T2": {v:140, note:"Unconfirmed, from official table."},
+  "Mana-Infused Armor T3+": {v:200, note:"Unconfirmed, from official table."},
+  "Sigil Staff T1": {v:0, note:"Official table."},
+  "Sigil Staff T2": {v:40, note:"Confirmed via real ASSESS-validated zero-remainder item."},
+  "Sigil Staff T3": {v:70, note:"Official table."},
+  "Sigil Staff T4": {v:140, note:"Official table."},
+  "Sigil Staff T5": {v:200, note:"Confirmed via real item (Lore Flares flourish test)."},
+  "Solar/Nebular Weapon T1": {v:40, note:"Unconfirmed, from official table."},
+  "Solar/Nebular Weapon T2+": {v:80, note:"Unconfirmed, from official table."},
+  "Twin Weapons T1": {v:50, note:"Unconfirmed, from official table."},
+  "Twin Weapons T2": {v:140, note:"Corrected from an earlier unconfirmed 100/150. Solved directly from an item with a stated CER (20), retroactively consistent with a second item."},
+  "Twin Weapons T3": {v:150, note:"Backward-solved from one item assuming it shares T2's post-correction value; involved an unresolved flare-bundling ambiguity."},
+  "Twisted Armor T2+": {v:150, note:"Unconfirmed, from official table."},
+  "Twisted Shield T2": {v:100, note:"Unconfirmed, from official table."},
+  "Twisted Shield T3/fully unlocked": {v:150, note:"Confirmed via 2 items closing within 1pt, treating its flare as BUNDLED (unlike Twisted Weapon)."},
+  "Twisted Weapon base/T0": {v:0, note:"Revised down from an earlier guess of 100 — likely near 0. Charge any stated flare SEPARATELY, do not assume bundled."},
+  "Twisted Weapon T3/fully unlocked+BOOSTED": {v:150, note:"Confirmed exact via 2 items. BOOSTED adds no surcharge beyond standard T3. Flare must be charged SEPARATELY (opposite of Twisted Shield)."},
+  "Vial Flares": {v:70, note:"Unconfirmed, from official table."},
+  "Voln Armor T1": {v:70, voln:true, note:"Ensorcell +100 / Sanctify -50 auto-applied since this script was selected."},
+  "Voln Armor T2": {v:140, voln:true, note:"UNCONFIRMED — may be wrong the same way T3 originally was. Ensorcell +100 / Sanctify -50 auto-applied."},
+  "Voln Armor T3": {v:150, voln:true, note:"Corrected from an earlier wrong 200. Confirmed via a second (T4) item landing exactly on a perfect square. Ensorcell +100 / Sanctify -50 auto-applied."},
+  "Voln Armor T4": {v:150, voln:true, note:"Confirmed exact (perfect square), same value as T3, mirroring Elven Armor's T3=T4 pattern. Ensorcell +100 / Sanctify -50 auto-applied."},
+  "Elven Armor T1": {v:70, note:"Official, GM Oscuro-confirmed."},
+  "Elven Armor T2": {v:140, note:"Official, GM Oscuro-confirmed."},
+  "Elven Armor T3": {v:200, note:"Official, GM Oscuro-confirmed."},
+  "Elven Armor T4": {v:200, note:"Official, GM Oscuro-confirmed. Confirmed via real item once the extraplanar defensive text was correctly read as the script's own effect, not a separate Bane."},
+  "Ethereal Armor (fully unlocked)": {v:167, note:"Solved from a real item with stated CERs. An earlier 'caps at 140' figure had no real basis."},
+  "Shock Lance": {v:null, note:"Varies with unlocks, caps at 140 — no confirmed single value, enter manually below."},
+  "Globus Naidem": {v:200, note:"Confirmed via a real zero-WPS item, Tier 4 of 4."},
+  "Sword Cane": {v:200, note:"Unofficial (GSWiki User:ZHEPHEN, 2020), never independently tested."},
+  "Sprite Weapon T3": {v:350, note:"Unofficial (GSWiki User:ZHEPHEN, 2020), never independently tested."},
+  "Wand-holding Staff": {v:20, note:"Unofficial (GSWiki User:ZHEPHEN, 2020), never independently tested."}
+};
+(function populateScriptDatalist() {
+  const dl = document.getElementById('scriptDatalist');
+  Object.keys(SCRIPT_DB).sort().forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    dl.appendChild(opt);
+  });
+})();
+
+function findScriptMatch(typed) {
+  const key = Object.keys(SCRIPT_DB).find(k => k.toLowerCase() === typed.trim().toLowerCase());
+  return key ? { name: key, ...SCRIPT_DB[key] } : null;
+}
+
+function updateScriptMatchNote() {
+  const typed = document.getElementById('f_scriptSearch').value;
+  const note = document.getElementById('scriptMatchNote');
+  if (!typed.trim()) { note.textContent = ''; return; }
+  const match = findScriptMatch(typed);
+  if (match) {
+    note.innerHTML = match.v === null
+      ? `<span style="color:#d4886f;">No single confirmed value — ${match.note} Use the manual override field below.</span>`
+      : `<span style="color:var(--accent);">&#10003; ${match.v} &mdash; ${match.note}</span>`;
+  } else {
+    note.innerHTML = `<span style="color:var(--ink-faint);">No exact match yet — keep typing, or use the manual override field below if this script isn't in the list.</span>`;
+  }
+}
+
+function toggleScriptGuess() {
+  const checked = document.getElementById('f_unknownScript').checked;
+  document.getElementById('scriptGuessWrap').style.display = checked ? 'flex' : 'none';
+  document.getElementById('scriptCustomWrap').style.display = checked ? 'flex' : 'none';
+  updateScriptMatchNote();
+}
+document.getElementById('f_unknownScript').addEventListener('change', toggleScriptGuess);
+document.getElementById('f_scriptSearch').addEventListener('input', updateScriptMatchNote);
+
+function compute() {
+  const difficulty = parseFloat(document.getElementById('f_difficulty').value);
+  const materialRaw = document.getElementById('f_material').value;
+  const enchant = parseFloat(document.getElementById('f_enchant').value) || 0;
+  const resist = parseFloat(document.getElementById('f_resist').value) || 0;
+  const td = parseFloat(document.getElementById('f_td').value) || 0;
+  const defender = parseFloat(document.getElementById('f_defender').value) || 0;
+  const ensorcell = parseFloat(document.getElementById('f_ensorcell').value) || 0;
+  const sanctify = parseFloat(document.getElementById('f_sanctify').value) || 0;
+  const flares = parseFloat(document.getElementById('f_flares').value) || 0;
+  const bane = document.getElementById('f_bane').checked;
+  const holy = document.getElementById('f_holy').checked;
+  // Auto-detect Voln from the script search field itself (whether or not "unknown script"
+  // is checked) rather than a separate standalone checkbox — Voln IS the script, not a
+  // side-property, so selecting it should be the only action needed.
+  const scriptTypedEarly = document.getElementById('f_scriptSearch').value.trim();
+  const earlyMatch = scriptTypedEarly ? findScriptMatch(scriptTypedEarly) : null;
+  const volnAdjust = !!(earlyMatch && earlyMatch.voln);
+  const padtype = document.getElementById('f_padtype').value;
+  const enhStr = document.getElementById('f_enhancives').value.trim();
+  const useEnhFormula = document.getElementById('f_useEnhFormula').checked;
+
+  if (isNaN(difficulty)) {
+    document.getElementById('ledgerHost').innerHTML = '<div class="empty-state">Enter the item\'s stated difficulty to build the ledger.</div>';
+    document.getElementById('verdictHost').innerHTML = '';
+    return;
+  }
+
+  const rows = [];
+  const caveats = [];
+
+  const matKey = normMat(materialRaw);
+  const woodCategory = document.getElementById('f_woodCategory').checked;
+  const effectiveMatKey = (matKey === 'wood' && woodCategory) ? 'wood (shield/bow/runestaff)' : matKey;
+  if (matKey) {
+    if (MATERIAL_MODS.hasOwnProperty(effectiveMatKey)) {
+      const mod = MATERIAL_MODS[effectiveMatKey];
+      rows.push({ label: `Material: ${effectiveMatKey} (table: ${mod >= 0 ? '+' : ''}${mod})`, value: -mod });
+    } else {
+      caveats.push(`Material "${materialRaw}" not found in the modifier table — treated as 0. Look it up manually on the Weighting, Padding, Sighting page.`);
+    }
+  }
+
+  if (enchant > 0) {
+    // TRUNC, not ROUND — confirmed via GSWiki's Enchant (925) page worked difficulty table
+    // (e.g. +25 -> 58, +7 -> 2, +33 -> 106, +43 -> 186; ROUND would give 59/3/107/187).
+    let e = Math.trunc(Math.pow(enchant - 2, 2) / 9);
+    if (e < 0) e = 0;
+    rows.push({ label: `Enchant +${enchant}`, value: e });
+  }
+
+  if (resist > 0) {
+    rows.push({ label: `Resistance ${resist}% total`, value: Math.round(resist / 2) });
+  }
+
+  if (td > 0) rows.push({ label: `Target Defense +${td}`, value: td * td });
+  if (defender > 0) rows.push({ label: `Defender +${defender}`, value: defender * defender });
+  if (ensorcell > 0) {
+    const ensVal = 50 * ensorcell + (volnAdjust ? 100 : 0);
+    rows.push({ label: `Ensorcell T${ensorcell}${volnAdjust ? ' (Voln +100)' : ''}`, value: ensVal });
+  }
+  if (sanctify > 0) {
+    const sancVal = 20 * sanctify - (volnAdjust ? 50 : 0);
+    rows.push({ label: `Sanctify T${sanctify}${volnAdjust ? ' (Voln -50)' : ''}`, value: sancVal });
+  }
+  const holyFire = document.getElementById('f_holyFire').checked;
+  if (holyFire) {
+    rows.push({ label: 'Holy Fire flares (separate +50, upgrade to Sanctify T5)', value: 50 });
+    if (sanctify !== 5) caveats.push('WARNING: Holy Fire is checked but Sanctify is not set to 5 — per GSWiki, Holy Fire is only available as an upgrade to a T5-sanctified item. Double check the Sanctify tier above.');
+  }
+  // Inherent-flare materials auto-detected from the material field — no manual confirmation
+  // needed, since these materials structurally cannot carry a second/different flare
+  // (confirmed: "you can't stack flares on top of drake, zorchar, drakar, rhimar,
+  // xazkruvrixis, kroderine, or most other materials" — GM Leafiara).
+  const isInherentFlareMaterial = INHERENT_FLARE_MATERIALS.includes(matKey);
+  if (flares > 0) {
+    if (isInherentFlareMaterial) {
+      caveats.push(`Flare not charged — ${matKey} structurally cannot carry any flare other than its own inherent one, which is already priced into the material modifier.`);
+    } else {
+      rows.push({ label: `${flares} flare(s) (assumed Category B, ~100 confirmed via live isolation)`, value: 100 * flares });
+      caveats.push('Flares assumed Category B (~100 each, confirmed via live isolation on elemental flares). Acuity (15/tier), Mana (~20/tier, confirmed), and Dispel (50 + 50×attempts) flares use different formulas — adjust manually if applicable.');
+    }
+  }
+  const flourish = parseFloat(document.getElementById('f_flourish').value) || 0;
+  if (flourish > 0) {
+    rows.push({ label: 'Flourish (highest of any present, not summed)', value: flourish });
+    caveats.push('GSWiki confirms multiple flourishes do NOT stack: "the project difficulty will be increased based on the highest difficulty out of all applied flourishes, regardless of which is currently active." Only the single highest value should be entered here.');
+  }
+  const katanaBase = document.getElementById('f_katanaBase').checked;
+  if (katanaBase) {
+    rows.push({ label: 'Katana inherent weighting (10 CER baseline, squared: trunc(10&sup2;))', value: 100 });
+    caveats.push('Katana\'s inherent 10 CER critical weighting baseline (contributing 100 to difficulty) is confirmed via GSWiki\'s Tatterclaws\' Comprehensive Gear Guide ("katanas have a natural 10 points of weighting") + GSWiki User:ZHEPHEN (2020) + an isolated item where it resolved an otherwise-unexplained gap. Only katanas and claidhmores are confirmed to carry this kind of baseline.');
+  }
+  if (bane) rows.push({ label: 'Creature Bane', value: 100 });
+  const gub = document.getElementById('f_gub').checked;
+  if (gub) {
+    rows.push({ label: 'Bundled creature-type Bane package (bane + AS/DS/weighting bonus, single property)', value: 100 });
+    caveats.push('Bundled bane package confirmed as a single 100-point property (not Bane + bonus charged separately) via three items across two creature types (undead, magical creatures), closing to exact remainders or clean perfect squares only under this treatment. If TD/Defender fields above also contain the bundled bonus, remove them to avoid double-charging. A separate STANDALONE Defender/TD (not tied to any specific creature type) should still be entered normally in those fields — this checkbox is only for the combined creature-bane-plus-bonus package.');
+  }
+
+  const isWeapon = document.getElementById('f_isWeapon').checked;
+  const rankEnhListStr = document.getElementById('f_rankEnhList').value.trim();
+  const useRankLookup = document.getElementById('f_useRankLookup').checked;
+
+  // Confirmed rank-enhancive lookup: EXACT (ability, boost, req) triples only. Boost/req alone
+  // is NOT sufficient to key this table — e.g. Ranged Weapons Ranks +1/req2 = 1 difficulty, but
+  // Combat Maneuvers Ranks +1/req2 = 5 difficulty. Ability name is required to disambiguate.
+  // Tier-group classification from GSWiki User:ZHEPHEN's enhancive tier chart (2020), confirmed
+  // useful via cross-ability exact matches within a tier at the same boost/req (July 2026):
+  // Tier 7: PF, Survival, DT, PL, S&H, Perception, FA, Trading, PP
+  // Tier 10: TWC, Shield Use, CM, EW, BW, THW, RW, PW, Brawling, Ambush, Dodging, Spell Aiming,
+  //          Harness Power, EMC, MMC, SMC
+  // Tier 14: Arcane Symbols, Magic Item Use, MOC (higher cost than Tier 10 at same boost/req)
+  // Lores (tier 17 per chart) showed one inconsistency when tested (Mental Lore-Manipulation vs
+  // Spiritual Lore-Summoning at the same 1@4 diverged, 18 vs 2) — treat lore-group fallback with
+  // lower confidence than Tier 7/10 above.
+  //
+  // CONTAMINATION AUDIT (July 2026): re-isolation with stricter raw-text filtering found 5
+  // entries below were corrupted by hidden properties the original isolation missed entirely —
+  // imbedded spell charges, "magic resistant" with no stated %, and unstated-magnitude Defender/TD
+  // phrases the shop database's OWN structured fields sometimes fail to capture even when present
+  // in the raw text. Those 5 have been REMOVED (not just flagged) since they were confirmed wrong,
+  // not just uncertain. The remaining entries below predate this discovery and have NOT yet been
+  // individually re-verified against the same strict filter — treat as moderate, not high,
+  // confidence until re-checked. This also means ZHEPHEN's stated formula (Trunc(level_req/3))
+  // may be correct after all; our disagreement with it was very likely bad data, not a bad formula.
+  const RANK_TIER_GROUPS = {
+    'physical fitness': 7, 'survival': 7, 'disarming traps': 7, 'picking locks': 7,
+    'stalking and hiding': 7, 'perception': 7, 'first aid': 7, 'trading': 7, 'pickpocketing': 7,
+    'two weapon combat': 10, 'shield use': 10, 'combat maneuvers': 10, 'edged weapons': 10,
+    'blunt weapons': 10, 'two-handed weapons': 10, 'ranged weapons': 10, 'polearm weapons': 10,
+    'brawling': 10, 'ambush': 10, 'dodging': 10, 'spell aiming': 10, 'harness power': 10,
+    'elemental mana control': 10, 'mental mana control': 10, 'spirit mana control': 10,
+    'arcane symbols': 14, 'magic item use': 14, 'multi opponent combat': 14
+  };
+  const RANK_ENHANCIVE_LOOKUP = {
+    'ranged weapons|1@2': 1, 'spell aiming|1@2': 1,
+    'survival|2@4': 3, 'spiritual lore - summoning|1@4': 2, 'mental lore - manipulation|1@4': 18,
+    'magic item use|2@9': 37, 'sorcerous lore - necromancy|2@10': 9,
+    'spell aiming|2@6': 19,
+    'spirit mana control|3@12': 8,
+    'stalking and hiding|3@9': 7, 'mental lore - manipulation|3@21': 18, 'elemental lore - water|3@21': 18,
+    'armor use|3@21': 18, 'dodging|3@12': 10, 'harness power|3@12': 55, 'magic item use|3@17': 14,
+    'perception|4@14': 11, 'stalking and hiding|4@14': 12, 'shield use|4@20': 18, 'spell aiming|4@20': 18,
+    'two-handed weapons|4@20': 18, 'spiritual lore - blessings|4@34': 30, 'spiritual lore - summoning|4@34': 30,
+    'pickpocketing|5@21': 18, 'brawling|5@30': 27, 'ranged weapons|5@30': 27, 'shield use|5@30': 27,
+    'magic item use|5@42': 36, 'spell aiming|5@30': 41, 'first aid|6@30': 25, 'disarming traps|6@30': 25,
+    'stalking and hiding|6@30': 25, 'thrown weapons|6@42': 37, 'spell aiming|6@42': 37, 'brawling|6@42': 37,
+    'stalking and hiding|7@39': 33, 'perception|7@39': 33, 'brawling|8@72': 64, 'elemental mana control|8@72': 64,
+    'ranged weapons|8@72': 63, 'two weapon combat|8@72': 63, 'swimming|14@63': 63
+  };
+
+  if (enhStr) {
+    const reqs = enhStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    if (reqs.length) {
+      if (useEnhFormula) {
+        const sum = reqs.reduce((a,b)=>a+b, 0);
+        let enhContribution = Math.trunc(sum / 3);
+        if (isWeapon) enhContribution += 200;
+        rows.push({ label: `Non-rank enhancive (&Sigma;req=${sum}${isWeapon ? ', weapon +200' : ''})`, value: enhContribution });
+        caveats.push('Non-rank enhancive estimate: Trunc(&Sigma;level-reqs/3), +200 if weapon. Confirmed on armor accessories (n=27, R\u00b2=0.997) and torso armor (1 exact ASSESS match). Uses rounded "trained N times" as a proxy for the true unrounded requirement, so expect it to run 0-3 points high.');
+      } else {
+        caveats.push(`${reqs.length} non-rank enhancive(s) present (level reqs: ${reqs.join(', ')}) — NOT included in the subtotal below.`);
+      }
+    }
+  }
+
+  if (rankEnhListStr) {
+    const pairs = rankEnhListStr.split(',').map(s => s.trim()).filter(Boolean);
+    let rankTotal = 0;
+    let allMatched = true;
+    let anyTierFallback = false;
+    const details = [];
+    pairs.forEach(p => {
+      const m = p.match(/^(.+?):\s*(\d+)@(\d+)$/);
+      if (!m) { allMatched = false; details.push(`${p}=unparseable (use "Ability Name: boost@req")`); return; }
+      const abilityName = m[1].trim().toLowerCase();
+      const boostReq = `${m[2]}@${m[3]}`;
+      const key = `${abilityName}|${boostReq}`;
+      if (useRankLookup && RANK_ENHANCIVE_LOOKUP.hasOwnProperty(key)) {
+        rankTotal += RANK_ENHANCIVE_LOOKUP[key];
+        details.push(`${m[1].trim()} +${m[2]} (req${m[3]})=${RANK_ENHANCIVE_LOOKUP[key]} (confirmed)`);
+      } else if (useRankLookup && RANK_TIER_GROUPS.hasOwnProperty(abilityName)) {
+        // Fall back to any OTHER confirmed ability in the same tier group at the same boost@req —
+        // confirmed reliable for Tier 7/10 (multiple exact cross-ability matches), less certain
+        // for Tier 14 (thinner data).
+        const tier = RANK_TIER_GROUPS[abilityName];
+        let tierMatch = null;
+        for (const [k, v] of Object.entries(RANK_ENHANCIVE_LOOKUP)) {
+          const [otherAbility, otherBoostReq] = k.split('|');
+          if (otherBoostReq === boostReq && RANK_TIER_GROUPS[otherAbility] === tier) { tierMatch = v; break; }
+        }
+        if (tierMatch !== null) {
+          rankTotal += tierMatch;
+          anyTierFallback = true;
+          details.push(`${m[1].trim()} +${m[2]} (req${m[3]})=${tierMatch} (tier-group match, Tier ${tier})`);
+        } else {
+          allMatched = false;
+          details.push(`${m[1].trim()} +${m[2]} (req${m[3]})=unknown (tier ${tier} known, but no confirmed pair at this boost/req)`);
+        }
+      } else {
+        allMatched = false;
+        details.push(`${m[1].trim()} +${m[2]} (req${m[3]})=unknown`);
+      }
+    });
+    if (rankTotal > 0) rows.push({ label: `Rank enhancive(s) (${details.join(', ')})`, value: rankTotal });
+    if (anyTierFallback) {
+      caveats.push(`One or more rank enhancives used a TIER-GROUP fallback (a different ability in the same tier bucket, per GSWiki User:ZHEPHEN's enhancive tier chart, confirmed at the same boost/req) rather than a direct match for that exact ability. Confirmed reliable for Tier 7/10 abilities via multiple exact cross-ability matches; Tier 14 has thinner supporting data.`);
+    }
+    if (!allMatched) {
+      caveats.push(`One or more rank enhancives has no confirmed lookup value, even via tier-group fallback, and was NOT included. No general formula exists yet, only a growing table of exact confirmed triples. The true remainder is likely smaller than shown.`);
+    } else if (pairs.length && !anyTierFallback) {
+      caveats.push(`Rank enhancive(s) used confirmed lookup values rather than a formula — exact (ability, boost, req) match only, sourced from live isolation and user-submitted ASSESS-validated items.`);
+    }
+  }
+
+  // holy item: confirmed 0 contribution via isolation analysis (n=88), no row, no caveat
+
+  const unknownScript = document.getElementById('f_unknownScript').checked;
+  let unreliable = false;
+  let unidentifiedScript = false;
+  if (unknownScript) {
+    const typed = document.getElementById('f_scriptSearch').value.trim();
+    const customVal = parseFloat(document.getElementById('f_scriptCustom').value);
+    const match = typed ? findScriptMatch(typed) : null;
+
+    if (!isNaN(customVal)) {
+      // Manual override always takes precedence when filled in, whether or not a search match exists.
+      rows.push({ label: `Script (manual${match ? `, overriding search match "${match.name}"` : ''})`, value: customVal });
+    } else if (match && match.v !== null) {
+      rows.push({ label: `Script: ${match.name}`, value: match.v });
+      caveats.push(`Script cost for "${match.name}": ${match.note}`);
+    } else if (match && match.v === null) {
+      unreliable = true;
+      unidentifiedScript = true;
+      caveats.push(`"${match.name}" has a variable script difficulty — ${match.note}`);
+    } else {
+      unreliable = true;
+      unidentifiedScript = true;
+      caveats.push('UNIDENTIFIED SCRIPT: item text includes "unknown (scripted) benefit" and no script was matched or manually entered. This is not a minor caveat — confirmed on a real item where ignoring this produced CER 14 against a true ASSESS of CER 2 (the actual gap was a 200-difficulty script). Do not trust the CER below until the script is identified via loresong, GM, or in-game ASSESS.');
+    }
+  }
+
+  const subtotal = rows.reduce((s, r) => s + r.value, 0);
+  const remainder = difficulty - subtotal;
+
+  renderLedger(rows, subtotal, difficulty, remainder);
+  renderVerdict(remainder, padtype, caveats, unreliable, unidentifiedScript, window.__textFlags && window.__textFlags.isRunestaff);
+}
+
+function renderLedger(rows, subtotal, difficulty, remainder) {
+  const host = document.getElementById('ledgerHost');
+  let html = `<table class="ledger"><thead><tr><th>Line</th><th style="text-align:right">Contribution</th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    html += `<tr style="--i:${i}"><td class="label">${r.label}</td><td class="val${r.value < 0 ? ' neg' : ''}">${r.value >= 0 ? '+' : ''}${r.value}</td></tr>`;
+  });
+  html += `<tr class="total"><td class="label">Subtotal (non-WPS)</td><td class="val">${subtotal >= 0 ? '+' : ''}${subtotal}</td></tr>`;
+  html += `<tr class="total"><td class="label">Stated difficulty</td><td class="val">${difficulty}</td></tr>`;
+  html += `<tr class="total"><td class="label">Remainder &rarr; WPS</td><td class="val">${remainder}</td></tr>`;
+  html += `</tbody></table>`;
+  host.innerHTML = html;
+}
+
+function cerFromRemainder(r) {
+  if (r === null || r === undefined || isNaN(r) || r < 0) return null;
+  const full = Math.floor(Math.sqrt(r));
+  const isPerfect = full * full === r;
+  const nextSq = (full + 1) * (full + 1);
+  const progress = isPerfect ? 0 : Math.round(((r - full*full) / (nextSq - full*full)) * 100);
+  return { full, isPerfect, progress };
+}
+
+function renderVerdict(remainder, padtype, caveats, unreliable, unidentifiedScript, isRunestaff) {
+  const host = document.getElementById('verdictHost');
+  setFieldAttention('f_scriptSearch', !!unidentifiedScript);
+  if (unidentifiedScript) document.getElementById('confirmDetails').open = true;
+
+  if (isRunestaff && padtype !== 'none') {
+    document.getElementById('confirmDetails').open = true;
+    const bodyHtml = `
+      <div class="verdict-top">
+        <div class="verdict-cer" style="color:#d4886f;">No CER — this is a runestaff</div>
+        <div class="conf-pill">Padding type should be "none"</div>
+      </div>
+      <div class="verdict-word">Staves cannot carry weighting (melee-only), sighting (ranged-only), or padding (armor-only) — there is no WPS category a runestaff fits into. The remainder (${remainder}) belongs entirely to the script or another property, never to a CER. Set "Padding type" to "none" above.</div>
+    `;
+    host.innerHTML = `<section class="verdict-panel conf-unreliable">${bodyHtml}${caveatBlock(caveats)}</section>`;
+    return;
+  }
+
+  if (unreliable) {
+    const headline = unidentifiedScript ? 'CER: Unidentified script' : 'CER: unreliable';
+    const bodyHtml = `
+      <div class="verdict-top">
+        <div class="verdict-cer" style="color:#d4886f;">${headline}</div>
+        <div class="conf-pill">Do not trust this number</div>
+      </div>
+      <div class="verdict-word">An unidentified script is present. The raw remainder (${remainder}) is <b>not</b> a usable CER estimate &mdash; the script's own difficulty is mixed into it and could easily be 100&ndash;200+ points. Identify the script (loresong, GM, or in-game context clues) and re-run, or get an in-game ASSESS directly.</div>
+    `;
+    host.innerHTML = `<section class="verdict-panel conf-unreliable">${bodyHtml}${caveatBlock(caveats)}</section>`;
+    return;
+  }
+
+  const confClass = caveats.length === 0 ? 'conf-solid' : 'conf-dashed';
+  const confLabel = caveats.length === 0 ? 'High confidence' : (caveats.length === 1 ? 'Moderate confidence' : 'Low confidence');
+  const term = window.__wpsTerm === 'weighted' ? 'weighted' : 'padded';
+  const nounTerm = window.__wpsTerm === 'weighted' ? 'weighting' : 'padding';
+
+  let bodyHtml = '';
+
+  if (padtype === 'none') {
+    const remainderIsClean = Math.abs(remainder) <= 3;
+    bodyHtml = `
+      <div class="verdict-top">
+        <div class="verdict-cer">No WPS on this item</div>
+        <div class="conf-pill">${remainderIsClean ? 'Clean' : 'Remainder unexplained'}</div>
+      </div>
+      <div class="verdict-word">No padding/weighting/sighting is stated for this item. ${remainderIsClean
+        ? `Remainder is ${remainder}, consistent with zero (within normal rounding noise) — everything is accounted for.`
+        : `Remainder is ${remainder}, which is NOT close to zero — something else is unaccounted for (a script, a property this tool doesn't detect, or a data entry issue). Do not attribute this to a CER; there is no WPS property in the text to attribute it to.`}</div>
+    `;
+    host.innerHTML = `<section class="verdict-panel ${remainderIsClean ? 'conf-solid' : 'conf-dashed'}">${bodyHtml}${caveatBlock(caveats)}</section>`;
+    return;
+  }
+
+  if (padtype === 'both') {
+    const perSide = Math.floor(Math.sqrt(remainder / 2));
+    const totalCer = perSide * 2;
+    const word = assessWordFor(perSide);
+    bodyHtml = `
+      <div class="verdict-top">
+        <div class="verdict-cer">CER ${totalCer}</div>
+        <div class="conf-pill">Combined crit + ${nounTerm}</div>
+      </div>
+      <div class="verdict-word">Both critical and damage ${nounTerm} are present on this item, each reading <b>"${word.toLowerCase()}"</b> on the assess-language scale &mdash; combined total CER ${totalCer}.</div>
+    `;
+    host.innerHTML = `<section class="verdict-panel conf-dashed">${bodyHtml}${caveatBlock(caveats)}</section>`;
+    return;
+  }
+
+  const cer = cerFromRemainder(remainder);
+  if (!cer) {
+    bodyHtml = `<div class="verdict-word">Remainder is negative &mdash; the non-WPS contributions alone exceed the stated difficulty. This is almost always a calculation error (an overestimated material/script/other value), not genuine "diminished" weighting/padding: diminished CER is a real mechanic, but since difficulty is based on CER&sup2;, a diminished (negative) CER would still add positive difficulty, not subtract it &mdash; so a negative remainder can't be explained by diminished weighting either way. Re-check your inputs.</div>`;
+    host.innerHTML = `<section class="verdict-panel conf-dashed">${bodyHtml}</section>`;
+    return;
+  }
+
+  const word = assessWordFor(cer.full);
+  const typeName = padtype === 'dmg' ? 'damage' : 'critical';
+  bodyHtml = `
+    <div class="verdict-top">
+      <div class="verdict-cer">CER ${cer.full}${cer.isPerfect ? '' : `<small> (+${cer.progress}% toward ${cer.full+1})</small>`}</div>
+      <div class="conf-pill">${confLabel}</div>
+    </div>
+    <div class="verdict-word">${typeName.charAt(0).toUpperCase()+typeName.slice(1)} ${nounTerm} &mdash; reads as <b>"${word.toLowerCase()}"</b> on the assess-language scale.</div>
+  `;
+  host.innerHTML = `<section class="verdict-panel ${confClass}">${bodyHtml}${caveatBlock(caveats)}</section>`;
+}
+
+function caveatBlock(caveats) {
+  if (!caveats.length) {
+    return `<div class="caveats"><div class="caveats-title">NO CAVEATS</div><ul><li>No undocumented properties detected. This deduction should be reliable, but an in-game ASSESS is still the ground truth.</li></ul></div>`;
+  }
+  return `<div class="caveats"><div class="caveats-title">CAVEATS</div><ul>${caveats.map(c => `<li>${c}</li>`).join('')}</ul></div>`;
+}
+</script>
+</body>
+</html>
