@@ -60,13 +60,19 @@ function walk(dir, cb) {
   }
 }
 function fileSpan(fp) {
-  const lines = fs.readFileSync(fp, 'utf8').split(/\r?\n/);
-  let start = null, end = null, count = 0;
-  for (const l of lines) {
-    const t = C.parseTime(l);
-    if (t) { if (start === null) start = t.hms; end = t.hms; count++; }
-  }
-  return { start, end, count, lines: lines.length };
+  // Fast: read only the first & last 8KB via fd (don't load whole file).
+  const fd = fs.openSync(fp, 'r');
+  const size = fs.fstatSync(fd).size;
+  const n = Math.min(8000, size);
+  const hbuf = Buffer.alloc(n), tbuf = Buffer.alloc(n);
+  fs.readSync(fd, hbuf, 0, n, 0);
+  fs.readSync(fd, tbuf, 0, n, size - n);
+  fs.closeSync(fd);
+  const head = hbuf.toString('utf8').match(/(\d\d:\d\d:\d\d):/);
+  const tailAll = tbuf.toString('utf8').match(/(\d\d:\d\d:\d\d):/g);
+  const start = head ? head[1] : null;
+  const end = tailAll ? tailAll[tailAll.length - 1].replace(/:$/, '') : null;
+  return { start, end, bytes: size };
 }
 
 /* ---------- index ---------- */
@@ -75,13 +81,13 @@ function cmdIndex() {
   const rows = [];
   for (const f of files) {
     const span = fileSpan(f.file);
-    rows.push({ char: f.char, name: path.basename(f.file), start: span.start || '?', end: span.end || '?', lines: span.count });
+    rows.push({ char: f.char, name: path.basename(f.file), start: span.start || '?', end: span.end || '?', kb: Math.round(span.bytes / 1024) });
   }
   if (args.json) { console.log(JSON.stringify(rows, null, 2)); return; }
   let curChar = null;
   for (const r of rows) {
     if (r.char !== curChar) { curChar = r.char; console.log('\n' + curChar); }
-    console.log('  ' + r.name.padEnd(26) + '  ' + r.start + ' → ' + r.end + '   (' + r.lines + ' events)');
+    console.log('  ' + r.name.padEnd(26) + '  ' + r.start + ' → ' + r.end + '   ' + String(r.kb).padStart(6) + ' KB');
   }
   console.log('\n' + rows.length + ' log files under ' + ROOT);
 }
@@ -124,6 +130,7 @@ function cmdWindow() {
 
   const state = { hp: null, position: null, stunned: null, room: null, char: null, rtEnd: null, promptTime: null };
   const rows = [];
+  let roomAtWin = null, prevText = null, invBlock = false;
   for (const raw of lines) {
     const t = C.parseTime(raw);
     // merge state from every line (state carries forward across the window boundary)
@@ -139,7 +146,18 @@ function cmdWindow() {
     if (!t) continue;
     if (t.secs < target - before || t.secs > target + after) continue;
     const text = C.stripTags(t.rest);
+    const tt = text.replace(/^\s+/, ''); // leading-trimmed copy for matching
+    if (!args.all) {
+      if (/^Your worn items are:/.test(tt)) { invBlock = true; continue; }
+      if (invBlock) {
+        if (/^(?:a|an|some|the) [^.!?]*[a-z0-9)\-]$/i.test(tt)) continue; // item line → suppress
+        if (tt && !C.isNoise(tt)) invBlock = false;                      // real prose ends the block
+      }
+    }
     if (!text || C.isNoise(text)) { if (!args.all) continue; }
+    if (!args.all && text === prevText) continue; // collapse consecutive duplicate lines
+    prevText = text;
+    if (state.room) roomAtWin = state.room;
     const rtRem = (state.rtEnd && state.promptTime) ? Math.max(0, state.rtEnd - state.promptTime) : null;
     rows.push({
       hms: t.hms,
@@ -157,7 +175,7 @@ function cmdWindow() {
   }
   console.log('=== window: ' + povNote + ' @ ' + args.at + '  (−' + before + 's … +' + after + 's) ===');
   console.log('file: ' + path.basename(fp) + (state.char ? '   POV char: ' + state.char : '') +
-    (state.room ? '   room: ' + state.room.lich + ' ' + state.room.name : ''));
+    (roomAtWin ? '   room: ' + roomAtWin.lich + ' ' + roomAtWin.name : ''));
   console.log('cols: TIME  HP  POS  [flags]  | event\n');
   const TAG = { death: '[DEATH] ', 'forced-move': '[MOVE]  ', disarm: '[DISARM]', stun: '[STUN]  ', finisher: '[KILL]  ', posture: '[POS]   ', rt: '[RT]    ' };
   for (const r of rows) {

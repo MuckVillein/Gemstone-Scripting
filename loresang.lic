@@ -12,8 +12,8 @@ The following inputs are available:
 			author: Kyrandos
       Other scripts: Combatical, VolnRestore2, Merchantical
 			game: gs
-			tags: utility, economy, bard, loresong, loresing, html, csv, output, export 
-			version: 1.2.1
+			tags: utility, economy, bard, loresong, loresing, html, csv, output, export
+			version: 1.2.6
 		  required: Lich > 5.0
 
 			\\Version\\
@@ -33,7 +33,10 @@ The following inputs are available:
 			                   loresang_report.html after each run with expandable recall text,
 			                   pinnable saved items via browser localStorage, and exportability
       1.2.1 3/01/2026 - Updated HTML output directory to standardized EduBarbarian folder
-		 
+      1.2.6 09/03/2026 - Fixed custom verses being sung with the item noun doubled and
+                          low-mana attempts spamming instead of waiting to recover. Fixed
+                          "song faltered" giving up on an item instead of trying the other verse.
+
 =end
 
 require 'gtk3' rescue nil
@@ -96,6 +99,22 @@ module Loresang
         return value_str.to_i
       end
       0
+    end
+
+    # Build a "loresing <noun> <verse>" command. The game always requires the noun
+    # as the target argument immediately after "loresing", and echoes it back as the
+    # first word of the sung line. If the verse text also substitutes #{item.noun}
+    # as its own leading word (a natural way to customize the verse), replace that
+    # duplicate with "that" rather than deleting it outright. Deleting it can leave
+    # a location phrase (e.g. "in my hand") sitting immediately after the object
+    # name, which GS4's parser can read as target disambiguation ("get sword in my
+    # hand") and swallow -- shrinking the actual sung lyrics down to almost nothing.
+    # "that" mirrors how the built-in default verses are worded ("that I hold in
+    # my hand...") so the noun is never directly adjacent to the rest of the verse.
+    def build_loresing_command(noun, verse)
+      text = verse.to_s.gsub('#{item.noun}', noun)
+      text = text.sub(/\A\s*#{Regexp.escape(noun)}\b\s*/i, 'that ') if text =~ /\A\s*#{Regexp.escape(noun)}\b/i
+      "loresing #{noun} #{text}"
     end
 
     def show_progress(items_remaining)
@@ -212,11 +231,10 @@ module Loresang
           break
         end
 
-        actual_verse1 = @verse1.gsub('#{item.noun}', noun)
-        fput "loresing #{noun} #{actual_verse1}"
+        fput build_loresing_command(noun, @verse1)
         pause 1
 
-        response = reget(12, /Roundtime|permanently unlocked|more to share|falters and fades|reached the end|nothing new|learn nothing new|resonates|previously learned|sufficient power|song is weak/) || []
+        response = reget(12, /Roundtime|permanently unlocked|more to share|falters and fades|reached the end|nothing new|learn nothing new|resonates|previously learned|sufficient power|song is weak|unable to sing/) || []
 
         if response.empty?
           Lich::Messaging.msg("yellow", "[Loresang] No immediate response after verse 1 - waiting...")
@@ -238,9 +256,12 @@ module Loresang
           Lich::Messaging.msg("yellow", "[Loresang] Waiting #{(rt + 1 + @rt_skew).to_i} seconds...")
           pause [rt + 1 + @rt_skew, 0].max
         elsif line =~ /falters and fades/
-          Lich::Messaging.msg("yellow", "[Loresang] Song faltered - no loresong or fully identified.")
-          break
-        elsif line =~ /sufficient power|song is weak/
+          # This verse's phrasing didn't land -- NOT the same as "nothing left to
+          # learn" (caught above). Fall through (no break) so verse 2 still gets
+          # tried this cycle; some items only respond to one of the two verses.
+          Lich::Messaging.msg("yellow", "[Loresang] Verse 1 had no impact - trying verse 2...")
+          pause 3
+        elsif line =~ /sufficient power|song is weak|unable to sing/
           # Mana too low to power the loresong - wait for any roundtime then recover
           if line =~ /roundtime: (\d+)/
             rt = $1.to_i
@@ -255,11 +276,10 @@ module Loresang
           pause 3
         end
 
-        actual_verse2 = @verse2.gsub('#{item.noun}', noun)
-        fput "loresing #{noun} #{actual_verse2}"
+        fput build_loresing_command(noun, @verse2)
         pause 1
 
-        response = reget(12, /Roundtime|permanently unlocked|more to share|falters and fades|reached the end|nothing new|learn nothing new|resonates|previously learned|sufficient power|song is weak/) || []
+        response = reget(12, /Roundtime|permanently unlocked|more to share|falters and fades|reached the end|nothing new|learn nothing new|resonates|previously learned|sufficient power|song is weak|unable to sing/) || []
 
         if response.empty?
           Lich::Messaging.msg("yellow", "[Loresang] No immediate response after verse 2 - continuing...")
@@ -281,9 +301,12 @@ module Loresang
           Lich::Messaging.msg("yellow", "[Loresang] Waiting #{(rt + 1 + @rt_skew).to_i} seconds...")
           pause [rt + 1 + @rt_skew, 0].max
         elsif line =~ /falters and fades/
-          Lich::Messaging.msg("yellow", "[Loresang] Song faltered - no loresong or fully identified.")
-          break
-        elsif line =~ /sufficient power|song is weak/
+          # This verse's phrasing didn't land -- NOT the same as "nothing left to
+          # learn" (caught above). Fall through (no break); the outer loop will
+          # cycle back and try verse 1 again next pass.
+          Lich::Messaging.msg("yellow", "[Loresang] Verse 2 had no impact - cycling back...")
+          pause 3
+        elsif line =~ /sufficient power|song is weak|unable to sing/
           # Mana too low to power the loresong - wait for any roundtime then recover
           if line =~ /roundtime: (\d+)/
             rt = $1.to_i
@@ -946,7 +969,7 @@ module Loresang
         grid.attach(sung_entry, 1, row, 4, 1)
         row += 1
 
-        v1_label = Gtk::Label.new("Custom first verse (blank = default):")
+        v1_label = Gtk::Label.new("Custom first verse (blank = default; 4 rhyming lines recommended):")
         v1_label.halign = :start
         grid.attach(v1_label, 0, row, 1, 1)
 
@@ -954,7 +977,14 @@ module Loresang
         v1_buffer.text = settings[:verse1] || ""
         v1_view = Gtk::TextView.new(v1_buffer)
         v1_view.wrap_mode = :word
-        v1_view.set_tooltip_text("Use \#{item.noun} for the item noun.")
+        v1_view.set_tooltip_text(
+          "Sent as: loresing <noun> <this text>. The noun is already the target, so it's\n" \
+          "already the first word sung -- only use \#{item.noun} if you want to reference\n" \
+          "it again later in the verse (it will NOT be doubled if you do).\n\n" \
+          "Per the GS wiki's loresinging guide: use 4 lines (separate with ;), all rhyming,\n" \
+          "and avoid loresinging-related keywords (lore, loresing, verse, sing, recall...).\n" \
+          "Short/2-line verses are much weaker and may never fully unlock some items."
+        )
 
         v1_frame = Gtk::Frame.new
         v1_frame.shadow_type = :in
@@ -978,7 +1008,7 @@ module Loresang
         grid.attach(placeholder_box1, 4, row, 1, 1)
         row += 1
 
-        v2_label = Gtk::Label.new("Custom second verse (blank = default):")
+        v2_label = Gtk::Label.new("Custom second verse (blank = default; 4 rhyming lines recommended):")
         v2_label.halign = :start
         grid.attach(v2_label, 0, row, 1, 1)
 

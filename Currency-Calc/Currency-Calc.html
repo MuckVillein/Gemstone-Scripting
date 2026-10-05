@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GS4 Currency Converter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500&display=swap');
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #181c27;
+    --surface2:  #1f2436;
+    --border:    #2e3550;
+    --border2:   #3d4666;
+    --gold:      #c9973a;
+    --gold-dim:  #7a591c;
+    --gold-glow: #e8b84b;
+    --scrip:     #a63228;
+    --scrip-dim: #6b1f1b;
+    --scrip-glow:#d44036;
+    --silver:    #8ab4c8;
+    --silver-dim:#4a6f82;
+    --muted:     #4a5270;
+    --muted2:    #636b88;
+    --text:      #d4d8e8;
+    --mono:      'Share Tech Mono', monospace;
+    --display:   'Cinzel', serif;
+    --body:      'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 13px;
+    min-height: 100vh;
+    padding: 18px 14px 40px;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  header h1 {
+    font-family: var(--display);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--gold-glow);
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 20px rgba(232,184,75,0.2);
+  }
+  header p {
+    color: var(--muted2);
+    font-size: 0.7rem;
+    margin-top: 3px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* ── Sections ── */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 11px 14px;
+    margin-bottom: 10px;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .section-title {
+    font-family: var(--display);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--muted2);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 9px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Settings bar — single inline row ── */
+  .settings-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .setting-item label {
+    font-size: 0.62rem;
+    color: var(--muted2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .setting-item.grow { flex: 1; min-width: 180px; }
+
+  /* Compact toggle */
+  .toggle-wrap {
+    display: flex;
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    overflow: hidden;
+    height: 28px;
+  }
+  .toggle-wrap button {
+    padding: 0 11px;
+    background: var(--surface2);
+    border: none;
+    color: var(--muted2);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+  }
+  .toggle-wrap button.active {
+    background: var(--gold-dim);
+    color: var(--gold-glow);
+  }
+
+  /* Inputs & selects */
+  select, input[type="number"], input[type="text"] {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    padding: 5px 8px;
+    height: 28px;
+    outline: none;
+    transition: border-color 0.12s;
+    -moz-appearance: textfield;
+  }
+  select { cursor: pointer; }
+  select:focus, input:focus { border-color: var(--gold-dim); }
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  .input-narrow  { width: 80px; }
+  .input-medium  { width: 110px; }
+  .select-pkg    { width: 100%; }
+
+  /* Package info hint */
+  .pkg-hint {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 2px;
+    min-height: 13px;
+  }
+  .pkg-hint span { color: var(--gold-dim); }
+
+  /* ── Converter ── */
+  .conv-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+    margin-bottom: 9px;
+    flex-wrap: wrap;
+  }
+  .conv-sep {
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding-bottom: 6px;
+    flex-shrink: 0;
+  }
+  .conv-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 100px;
+  }
+  .conv-field label {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .attune-wrap {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 4px;
+  }
+  .attune-wrap input[type="checkbox"] {
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: none;
+    accent-color: var(--gold-dim);
+    cursor: pointer;
+  }
+  .attune-label {
+    font-size: 0.6rem;
+    color: var(--muted2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .conv-field input {
+    width: 100%;
+    height: 30px;
+    font-size: 0.82rem;
+    padding: 5px 8px;
+  }
+
+  /* color coding */
+  .field-usd input  { border-left: 3px solid var(--gold-dim); }
+  .field-sil input  { border-left: 3px solid var(--silver-dim); }
+  .field-scr input  { border-left: 3px solid #555c70; }
+  .field-usd label  { color: var(--gold-dim); }
+  .field-sil label  { color: var(--silver-dim); }
+  .field-scr label  { color: var(--text); }
+
+  input.user-typed  { font-weight: 700; color: #fff; }
+  input.derived-dim { color: var(--muted2); }
+
+  .derived-sub {
+    font-size: 0.62rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    min-height: 12px;
+  }
+  .derived-sub span { color: var(--gold-dim); }
+
+  /* Buttons row */
+  .conv-actions {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .note-input { flex: 1; min-width: 120px; height: 28px; }
+  .btn {
+    padding: 0 13px;
+    height: 28px;
+    border: none;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: opacity 0.12s;
+    white-space: nowrap;
+  }
+  .btn:hover { opacity: 0.82; }
+  .btn-calc  { background: var(--gold-dim);  color: var(--gold-glow); }
+  .btn-clear { background: var(--surface2);  color: var(--muted2); border: 1px solid var(--border2); }
+  .btn-save  { background: var(--scrip-dim); color: #f0a09a; }
+  .btn-del   { background: transparent; border: 1px solid var(--scrip-dim); color: var(--scrip-glow);
+               padding: 0 9px; height: 24px; font-size: 0.68rem; border-radius: 3px;
+               font-family: var(--mono); cursor: pointer; transition: opacity 0.12s; }
+  .btn-del:hover { opacity: 0.8; }
+
+  /* ── Saved list ── */
+  .saved-list { display: flex; flex-direction: column; gap: 6px; }
+  .saved-entry {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 7px 10px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    row-gap: 3px;
+  }
+  .saved-note {
+    font-size: 0.72rem;
+    color: var(--muted2);
+    font-style: italic;
+    grid-column: 1;
+    grid-row: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .saved-values {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    grid-column: 1;
+    grid-row: 2;
+    align-items: baseline;
+  }
+  .saved-del {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+  }
+  .sv-usd { color: var(--gold-dim); }
+  .sv-sil { color: var(--silver-dim); }
+  .sv-scr { color: var(--text); }
+  .sv-rate { color: #5a6070; font-size: 0.68rem; white-space: nowrap; width: 100%; margin-top: 1px; }
+  .saved-values strong { font-weight: 700; }
+  .empty-state {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-style: italic;
+    text-align: center;
+    padding: 8px 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚔ GS4 Currency Converter</h1>
+</header>
+
+<!-- SETTINGS -->
+<div class="section">
+  <div class="section-title">Settings</div>
+  <div class="settings-bar">
+
+    <!-- Tier toggle -->
+    <div class="setting-item">
+      <label>Account Tier</label>
+      <div class="toggle-wrap">
+        <button id="btn-standard" class="active" onclick="setTier('standard')">Standard</button>
+        <button id="btn-premium" onclick="setTier('premium')">Premium</button>
+      </div>
+    </div>
+
+    <!-- Package dropdown -->
+    <div class="setting-item grow">
+      <label>SimuCoin Package</label>
+      <select id="pkg-select" onchange="onPkgChange()">
+      </select>
+      <div class="pkg-hint" id="pkg-hint"></div>
+    </div>
+
+    <!-- Silver rate -->
+    <div class="setting-item">
+      <label>$ / Million Silver</label>
+      <input type="number" id="silver-rate" class="input-narrow" value="2.00" min="0.01" step="0.01">
+    </div>
+
+    <!-- Scrip per entry -->
+    <div class="setting-item">
+      <label>Scrip / Entry</label>
+      <select id="scrip-per-entry" class="input-medium">
+        <option value="300" selected>300</option>
+        <option value="305">305</option>
+        <option value="310">310</option>
+        <option value="315">315</option>
+        <option value="320">320</option>
+        <option value="325">325</option>
+        <option value="330">330</option>
+      </select>
+    </div>
+
+  </div>
+</div>
+
+<!-- CONVERTER -->
+<div class="section">
+  <div class="section-title">Converter</div>
+
+  <div class="conv-row">
+    <div class="conv-field field-usd">
+      <label>USD ($)</label>
+      <input type="number" id="inp-usd" placeholder="0.00" min="0" step="0.01">
+      <div class="derived-sub" id="sub-usd"></div>
+    </div>
+    <div class="conv-sep">·</div>
+    <div class="conv-field field-sil">
+      <label>Silver (M)</label>
+      <input type="number" id="inp-sil" placeholder="0.000" min="0" step="0.001">
+      <div class="derived-sub" id="sub-sil"></div>
+    </div>
+    <div class="conv-sep">·</div>
+    <div class="conv-field field-scr">
+      <label>
+        Scrip
+        <span class="attune-wrap">
+          <input type="checkbox" id="chk-attune">
+          <span class="attune-label">Attune</span>
+        </span>
+      </label>
+      <input type="number" id="inp-scr" placeholder="0" min="0" step="1">
+      <div class="derived-sub" id="sub-scr"></div>
+    </div>
+  </div>
+
+  <div class="conv-actions">
+    <button class="btn btn-calc"  onclick="calculate()">Calculate</button>
+    <button class="btn btn-clear" onclick="clearAll()">Clear</button>
+    <input  type="text" class="note-input" id="save-note" placeholder="Note (optional)">
+    <button class="btn btn-save"  onclick="saveEntry()">Save</button>
+  </div>
+</div>
+
+<!-- SAVED -->
+<div class="section">
+  <div class="section-title">Saved</div>
+  <div class="saved-list" id="saved-list">
+    <div class="empty-state">No saved conversions yet.</div>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const PACKAGES = [
+  { base: 500,       cost: 4.99,    stdBonus: 0,  premBonus: 10 },
+  { base: 1000,      cost: 9.99,    stdBonus: 5,  premBonus: 15 },
+  { base: 2000,      cost: 19.99,   stdBonus: 10, premBonus: 20 },
+  { base: 3500,      cost: 34.99,   stdBonus: 15, premBonus: 25 },
+  { base: 5000,      cost: 49.99,   stdBonus: 20, premBonus: 30 },
+  { base: 10000,     cost: 99.99,   stdBonus: 25, premBonus: 35 },
+  { base: 100000,    cost: 999.99,  stdBonus: 30, premBonus: 40 },
+  { base: 300000,    cost: 2999.99, stdBonus: 30, premBonus: 40 },
+  { base: 500000,    cost: 4999.99, stdBonus: 30, premBonus: 40 },
+  { base: 1000000,   cost: 9999.99, stdBonus: 30, premBonus: 40 },
+];
+
+let tier           = 'standard';
+let selectedPkgIdx = 5;   // default $99.99
+let lastTyped      = null;
+let savedEntries   = [];
+let lastComputed   = { usd: null, sil: null, scr: null }; // raw numbers after last calculate
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  loadSettings();
+  renderPkgDropdown();
+  loadSaved();
+  ['usd','sil','scr'].forEach(id => {
+    document.getElementById('inp-'+id).addEventListener('input', () => { lastTyped = id; });
+  });
+  // persist settings on any change to the two plain inputs
+  document.getElementById('silver-rate').addEventListener('change', saveSettings);
+  document.getElementById('scrip-per-entry').addEventListener('change', saveSettings);
+}
+
+// ── Settings persistence ──────────────────────────────────────────────────────
+function saveSettings() {
+  try {
+    localStorage.setItem('gs4-settings', JSON.stringify({
+      tier,
+      selectedPkgIdx,
+      silverRate:    document.getElementById('silver-rate').value,
+      scripPerEntry: document.getElementById('scrip-per-entry').value,
+    }));
+  } catch(e) {}
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem('gs4-settings');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.tier)           { tier = s.tier; }
+    if (s.selectedPkgIdx != null) { selectedPkgIdx = s.selectedPkgIdx; }
+    if (s.silverRate)     { document.getElementById('silver-rate').value    = s.silverRate; }
+    if (s.scripPerEntry)  { document.getElementById('scrip-per-entry').value = s.scripPerEntry; }
+    // reflect tier onto toggle buttons
+    document.getElementById('btn-standard').classList.toggle('active', tier === 'standard');
+    document.getElementById('btn-premium').classList.toggle('active',  tier === 'premium');
+  } catch(e) {}
+}
+
+// ── Tier ──────────────────────────────────────────────────────────────────────
+function setTier(t) {
+  tier = t;
+  document.getElementById('btn-standard').classList.toggle('active', t === 'standard');
+  document.getElementById('btn-premium').classList.toggle('active',  t === 'premium');
+  renderPkgDropdown();
+  saveSettings();
+}
+
+// ── Package helpers ───────────────────────────────────────────────────────────
+function getSC(pkg) {
+  const bonus = tier === 'premium' ? pkg.premBonus : pkg.stdBonus;
+  return Math.round(pkg.base * (1 + bonus / 100));
+}
+function getCostPer100(pkg) {
+  return (pkg.cost / getSC(pkg)) * 100;
+}
+function fmtK(n) {
+  if (n >= 1000000) return (n/1000000).toLocaleString()+'M';
+  if (n >= 1000)    return (n/1000).toLocaleString()+'k';
+  return n.toLocaleString();
+}
+
+function renderPkgDropdown() {
+  const sel = document.getElementById('pkg-select');
+  const prev = selectedPkgIdx;
+  sel.innerHTML = '';
+  PACKAGES.forEach((pkg, i) => {
+    const sc   = getSC(pkg);
+    const rate = getCostPer100(pkg).toFixed(5);
+    const opt  = document.createElement('option');
+    opt.value  = i;
+    opt.textContent = `$${pkg.cost.toFixed(2)} — ${fmtK(sc)} SC  ($${rate}/100 SC)`;
+    if (i === prev) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  updatePkgHint();
+}
+
+function onPkgChange() {
+  selectedPkgIdx = parseInt(document.getElementById('pkg-select').value);
+  updatePkgHint();
+  saveSettings();
+}
+
+function updatePkgHint() {
+  const pkg  = PACKAGES[selectedPkgIdx];
+  const sc   = getSC(pkg);
+  const rate = getCostPer100(pkg);
+  // cost per entry = cost per 100 SC
+  const entryUSD = rate;
+  const hint = document.getElementById('pkg-hint');
+  hint.innerHTML =
+    `<span>${fmtK(sc)} SC</span> · 1 entry = <span>$${entryUSD.toFixed(4)}</span>`;
+}
+
+// ── Conversion ────────────────────────────────────────────────────────────────
+function getSettings() {
+  const silverRate    = parseFloat(document.getElementById('silver-rate').value)     || 0;
+  const scripPerEntry = parseInt(document.getElementById('scrip-per-entry').value)   || 300;
+  const pkg           = PACKAGES[selectedPkgIdx];
+  const costPer100    = getCostPer100(pkg);   // USD per 100 SC = USD per 1 entry
+  return { silverRate, scripPerEntry, costPer100 };
+}
+
+function usdToScrip(usd, s)  { return (usd / s.costPer100) * s.scripPerEntry; }
+function scripToUsd(scr, s)  { return (scr / s.scripPerEntry) * s.costPer100; }
+function usdToSilver(usd, s) { return s.silverRate > 0 ? usd / s.silverRate : 0; }
+function silverToUsd(sil, s) { return sil * s.silverRate; }
+
+function calculate() {
+  const s   = getSettings();
+  const uIn = parseFloat(document.getElementById('inp-usd').value);
+  const sIn = parseFloat(document.getElementById('inp-sil').value);
+  const cIn = parseFloat(document.getElementById('inp-scr').value);
+
+  let source = lastTyped;
+  if (!source) {
+    if (!isNaN(uIn) && uIn > 0) source = 'usd';
+    else if (!isNaN(sIn) && sIn > 0) source = 'sil';
+    else if (!isNaN(cIn) && cIn > 0) source = 'scr';
+  }
+
+  let usd, sil, scr;
+  if (source === 'usd' && !isNaN(uIn)) {
+    usd = uIn; scr = usdToScrip(usd, s); sil = usdToSilver(usd, s);
+  } else if (source === 'sil' && !isNaN(sIn)) {
+    sil = sIn; usd = silverToUsd(sil, s); scr = usdToScrip(usd, s);
+  } else if (source === 'scr' && !isNaN(cIn)) {
+    scr = cIn; usd = scripToUsd(scr, s); sil = usdToSilver(usd, s);
+  } else { return; }
+
+  const attune = document.getElementById('chk-attune').checked;
+  if (attune) { usd *= 0.75; sil *= 0.75; scr *= 0.75; }
+
+  const entries = usd / s.costPer100;
+  const sc      = entries * 100;
+
+  lastComputed = { usd, sil, scr };
+
+  setField('usd', usd, source === 'usd');
+  setField('sil', sil, source === 'sil');
+  setField('scr', scr, source === 'scr');
+
+  document.getElementById('sub-usd').innerHTML = `<span>${fmtUSD(usd)}</span>`;
+  document.getElementById('sub-sil').innerHTML = `<span>${fmtSilFull(sil)}</span> silver`;
+  document.getElementById('sub-scr').innerHTML =
+    `<span>${fmtScr(scr)}</span> scrip · <span>${fmtNum(sc,0)} SC</span> · <span>${fmtNum(entries,2)}</span> entries`;
+}
+
+function setField(id, val, isTyped) {
+  const el = document.getElementById('inp-'+id);
+  if (!isTyped) {
+    // Store raw number so number input accepts it; formatted display goes in sub-line
+    el.value = isNaN(val) ? '' : parseFloat(val.toFixed(6));
+    el.className = 'derived-dim';
+  } else {
+    el.className = 'user-typed';
+  }
+}
+
+// ── Format ────────────────────────────────────────────────────────────────────
+function fmtNum(n, dec=0) {
+  if (isNaN(n)) return '—';
+  return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function fmtUSD(n)     { return isNaN(n) ? '—' : '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtSil(n)     { return isNaN(n) ? '—' : n.toLocaleString('en-US',{minimumFractionDigits:3,maximumFractionDigits:3}); }
+function fmtSilFull(n) {
+  if (isNaN(n)) return '—';
+  const raw = n * 1_000_000;
+  if (raw >= 1_000_000_000) return (raw/1_000_000_000).toFixed(2)+'B';
+  if (raw >= 1_000_000)     return (raw/1_000_000).toFixed(2)+'M';
+  return fmtNum(raw, 0);
+}
+function fmtScr(n) { return isNaN(n) ? '—' : Math.round(n).toLocaleString('en-US'); }
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+function clearAll() {
+  ['usd','sil','scr'].forEach(id => {
+    const el = document.getElementById('inp-'+id);
+    el.value = ''; el.className = '';
+    document.getElementById('sub-'+id).innerHTML = '';
+  });
+  document.getElementById('save-note').value = '';
+  lastTyped    = null;
+  lastComputed = { usd: null, sil: null, scr: null };
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+function saveEntry() {
+  const { usd, sil, scr } = lastComputed;
+  if (usd === null && sil === null && scr === null) return;
+  const note        = document.getElementById('save-note').value.trim() || '—';
+  const source      = lastTyped || 'usd';
+  const pkg         = PACKAGES[selectedPkgIdx];
+  const scRate      = getCostPer100(pkg).toFixed(5);
+  const silverRate  = parseFloat(document.getElementById('silver-rate').value) || 0;
+  const scripEntry  = parseInt(document.getElementById('scrip-per-entry').value) || 300;
+  const attunedAtSave = document.getElementById('chk-attune').checked;
+  savedEntries.push({
+    id: Date.now(), note, source, scRate,
+    silverRate: silverRate.toFixed(2),
+    scripEntry,
+    attunedAtSave,
+    usd: usd != null ? fmtUSD(usd) : '—',
+    sil: sil != null ? fmtSil(sil) : '—',
+    scr: scr != null ? fmtScr(scr) : '—',
+  });
+  persistSaved(); renderSaved();
+  document.getElementById('save-note').value = '';
+}
+
+function deleteEntry(id) {
+  savedEntries = savedEntries.filter(e => e.id !== id);
+  persistSaved(); renderSaved();
+}
+
+function persistSaved() {
+  try { localStorage.setItem('gs4-currency-saves', JSON.stringify(savedEntries)); } catch(e) {}
+}
+
+function loadSaved() {
+  try { const r = localStorage.getItem('gs4-currency-saves'); if (r) savedEntries = JSON.parse(r); }
+  catch(e) { savedEntries = []; }
+  renderSaved();
+}
+
+function renderSaved() {
+  const list = document.getElementById('saved-list');
+  if (savedEntries.length === 0) {
+    list.innerHTML = '<div class="empty-state">No saved conversions yet.</div>';
+    return;
+  }
+  list.innerHTML = savedEntries.map(e => {
+    const uB = e.source==='usd', sB = e.source==='sil', cB = e.source==='scr';
+    const rateParts = [];
+    if (e.scRate)        rateParts.push(`SC=$${esc(e.scRate)}`);
+    if (e.silverRate)    rateParts.push(`$/MS=$${esc(e.silverRate)}`);
+    if (e.scripEntry)    rateParts.push(`Scrip/Entry=${esc(e.scripEntry)}`);
+    if (e.attunedAtSave) rateParts.push(`[attuned]`);
+    const rateStr = rateParts.join(' · ');
+    return `
+      <div class="saved-entry">
+        <div class="saved-note">${esc(e.note)}</div>
+        <div class="saved-values">
+          <span class="sv-usd">USD ${uB?'<strong>':''}${esc(e.usd||'—')}${uB?'</strong>':''}</span>
+          <span class="sv-sil">Silver ${sB?'<strong>':''}${esc(e.sil||'—')}M${sB?'</strong>':''}</span>
+          <span class="sv-scr">Scrip ${cB?'<strong>':''}${esc(e.scr||'—')}${cB?'</strong>':''}</span>
+          ${rateStr ? `<span class="sv-rate">${rateStr}</span>` : ''}
+        </div>
+        <div class="saved-del"><button class="btn-del" onclick="deleteEntry(${e.id})">✕</button></div>
+      </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+init();
+</script>
+</body>
+</html>

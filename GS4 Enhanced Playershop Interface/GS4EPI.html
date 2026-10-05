@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GS4-Enhanced-Playershop-Interface (GS4EPI)</title>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1d2029; --panel2: #262b38; --border: #3a4051;
+    --text: #e6e8ee; --muted: #9aa2b5; --accent: #4fd18b; --accent2: #7aa2ff;
+    --warn: #e7b24b; --danger: #e05a5a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  header {
+    flex: 0 0 auto;
+    padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  #status { font-size: 12px; color: var(--muted); }
+  button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { border-color: var(--accent2); }
+  button.primary { background: var(--accent); color: #0c1210; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  #runSelectedBtn.primary { background: #2f8f5f; border-color: #2f8f5f; color: #eafff2; }
+  button.danger { border-color: var(--danger); color: var(--danger); background: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; flex: 1 1 auto; min-height: 0; }
+  aside {
+    background: var(--panel); border-right: 1px solid var(--border); padding: 16px;
+    overflow-y: auto; min-height: 0;
+  }
+  main { padding: 16px 20px; overflow: auto; min-height: 0; }
+  fieldset {
+    border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; padding: 10px 12px;
+  }
+  legend { color: var(--accent2); font-size: 12px; font-weight: 600; padding: 0 6px; }
+  .chkgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; max-height: 220px; overflow-y: auto; }
+  label.chk { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+  label.chk input { accent-color: var(--accent); }
+  .row2 { display: flex; gap: 8px; }
+  .row2 > div { flex: 1; }
+  input[type=text], input[type=number] {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  label.field { display: block; font-size: 11.5px; color: var(--muted); margin: 6px 0 2px; }
+  .savebar { display: flex; gap: 6px; margin-top: 8px; }
+  .savebar input { flex: 1; }
+  #savedList { list-style: none; padding: 0; margin: 8px 0 0; }
+  #savedList li {
+    display: flex; align-items: center; gap: 6px; padding: 6px 4px; border-radius: 6px;
+    font-size: 12.5px;
+  }
+  #savedList li:hover { background: var(--panel2); }
+  #savedList li.editing { background: var(--panel2); outline: 1px solid var(--accent2); }
+  #savedList li .name { flex: 1; cursor: pointer; }
+  #savedList li .name:hover { color: var(--accent2); }
+  #savedList button.mini { padding: 2px 6px; font-size: 11px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { position: sticky; top: 0; background: var(--panel2); cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { color: var(--accent2); }
+  tr:hover td { background: #20242f; }
+  .score { color: var(--accent); font-weight: 700; }
+  .price { color: var(--warn); }
+  .taglist span {
+    display: inline-block; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1px 7px; margin: 1px 3px 1px 0; font-size: 10.5px; color: var(--muted);
+  }
+  .capacityBadge {
+    display: inline-block; background: var(--panel2); border: 1px solid var(--accent);
+    border-radius: 10px; padding: 1px 7px; margin: 1px 3px 1px 0; font-size: 10.5px; color: var(--accent); font-weight: 600;
+  }
+  .imbed-line { color: var(--accent2); margin-top: 3px; }
+  .imbed-line b { color: var(--accent2); }
+
+  .suggestList {
+    position: absolute; z-index: 30; top: 100%; left: 0; right: 0; margin-top: 2px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
+    max-height: 180px; overflow-y: auto; display: none;
+  }
+  .suggestList.show { display: block; }
+  .suggestList div { padding: 5px 8px; font-size: 12px; cursor: pointer; color: var(--text); }
+  .suggestList div:hover { background: var(--bg); color: var(--accent2); }
+  .chipList { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chip {
+    background: var(--panel2); border: 1px solid var(--accent); border-radius: 12px;
+    padding: 2px 4px 2px 9px; font-size: 11px; color: var(--accent); font-weight: 600;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .chip button {
+    background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px;
+    padding: 0 4px; line-height: 1;
+  }
+  .chip.chip-gold { border-color: var(--warn); color: var(--warn); }
+  .chip.chip-gold button { color: var(--warn); }
+  .chip-name { cursor: pointer; }
+  .healedMark { color: var(--accent2); cursor: help; font-size: 11px; }
+  .chip-name:hover { text-decoration: underline; }
+  #appVersion {
+    position: fixed; left: 8px; bottom: 6px; font-size: 10px; color: var(--muted);
+    opacity: 0.6; z-index: 50; user-select: none; pointer-events: none;
+  }
+  .enh-target-hit {
+    background: var(--accent); color: #0c1210 !important; padding: 1px 5px; border-radius: 4px;
+  }
+  .enh-target-hit b { color: #0c1210 !important; }
+  .enh-target-hit-gold {
+    background: var(--warn); color: #241a04 !important; padding: 1px 5px; border-radius: 4px;
+  }
+  .enh-target-hit-gold b { color: #241a04 !important; }
+  tr.target-hit-row { background: rgba(79, 209, 139, 0.07); }
+  tr.target-hit-row:hover td { background: rgba(79, 209, 139, 0.12); }
+  button.mini { padding: 2px 6px; font-size: 11px; white-space: nowrap; }
+  .recallRow { display: inline-flex; align-items: center; gap: 6px; }
+  .shopLinkIcon { font-size: 12px; text-decoration: none; opacity: 0.8; line-height: 1; }
+  .shopLinkIcon:hover { opacity: 1; }
+  .recallText {
+    font-size: 10px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    color: var(--muted); white-space: pre-wrap; max-width: 320px; max-height: 160px;
+    overflow-y: auto; margin-top: 4px; line-height: 1.4;
+  }
+  .enh-line { font-size: 11.5px; color: var(--muted); }
+  .enh-line b { color: var(--text); }
+  .enh-doubled { color: var(--text); font-weight: 600; }
+  .enh-doubled b { color: var(--accent); }
+  .searchTagWrap { margin-top: 4px; }
+  .badge { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 1px 6px; font-size: 10.5px; margin-right:4px;}
+  #resultCount { color: var(--muted); font-size: 12.5px; }
+  #criteriaSummary { color: var(--muted); font-size: 11px; margin-bottom: 10px; line-height: 1.5; }
+  .helpNote { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+  .infoIcon { color: var(--muted); cursor: help; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .sectionDivider { border: none; border-top: 2px solid var(--border); margin: 18px 0 16px; position: relative; }
+  .sectionDivider::after {
+    content: ''; position: absolute; left: 0; top: -1px; width: 40px; height: 2px; background: var(--accent2);
+  }
+  .infoIcon:hover { color: var(--accent2); }
+  legend .infoIcon { margin-left: 4px; }
+  a.itemname { color: var(--text); text-decoration: none; }
+  a.itemname:hover { color: var(--accent2); text-decoration: underline; }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+
+  #propTree details, .collapsibleField details { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; background: var(--bg); }
+  #propTree > details { padding: 2px 0; }
+  #propTree summary, .collapsibleField summary { list-style: none; cursor: pointer; padding: 6px 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  #propTree summary::-webkit-details-marker, .collapsibleField summary::-webkit-details-marker { display: none; }
+  #propTree summary::before, .collapsibleField summary::before { content: '\25B8'; color: var(--muted); font-size: 10px; transition: transform .12s; }
+  #propTree details[open] > summary::before, .collapsibleField details[open] > summary::before { transform: rotate(90deg); }
+  #propTree summary label.chk { flex: 1; font-weight: 600; }
+  #propTree .treeBody, .collapsibleField .treeBody { padding: 4px 10px 8px 22px; }
+  #propTree .subLabel, .subLabel { font-size: 10.5px; color: var(--accent2); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 3px; }
+  #propTree .leafOnly { padding: 6px 8px; }
+  #propTree .leafOnly label.chk { font-weight: 600; }
+
+  .collapsibleField { border: none; padding: 0; margin-bottom: 12px; }
+  .collapsibleField summary { font-weight: 600; color: var(--accent2); }
+  .collapsibleField .countBadge { margin-left: auto; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 0 7px; font-size: 10.5px; color: var(--muted); font-weight: 400; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>GS4-Enhanced-Playershop-Interface (GS4EPI)</h1>
+    <div class="sub">Scrapes shops.elanthia.online live (using its own item classification engine) · saved searches persist in this file's local storage</div>
+    <div id="engineNote" style="display:none; color:#e7b24b; font-size:11.5px; margin-top:4px;">⚠ Could not load shops.elanthia.online's classification engine (offline, or their asset paths changed) — using this app's built-in fallback parser instead. Item type / worn location accuracy may be lower; use the raw text search box as a safety net.</div>
+  </div>
+  <div style="display:flex; align-items:center; gap:12px;">
+    <span id="status">Not loaded yet</span>
+    <button id="refreshBtn" class="primary">Refresh Data</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <fieldset class="collapsibleField">
+      <details id="itemTypeDetails">
+        <summary>Item Type <span class="countBadge" id="itemTypeCount"></span></summary>
+        <div class="treeBody"><div class="chkgrid" id="itemTypeGrid"></div></div>
+      </details>
+    </fieldset>
+
+    <fieldset class="collapsibleField">
+      <details id="wornDetails">
+        <summary>Worn Location <span class="countBadge" id="wornCount"></span></summary>
+        <div class="treeBody"><div class="chkgrid" id="wornGrid"></div></div>
+      </details>
+    </fieldset>
+
+    <fieldset class="collapsibleField">
+      <details id="propertiesDetails">
+        <summary>Properties <span class="countBadge" id="propertyCount"></span></summary>
+        <div class="treeBody"><div id="propTree"></div></div>
+      </details>
+    </fieldset>
+
+    <fieldset class="collapsibleField">
+      <details id="enhFilterDetails" open>
+        <summary>Enhancive Filtering <span class="countBadge" id="enhFilterCount"></span></summary>
+        <div class="treeBody">
+          <div class="subLabel">Enhancive Targets <span class="infoIcon" title="Items granting any of these get their matching enhancive line highlighted and are always pinned to the top of the results, regardless of sort order. Click a tag to set a minimum value it must meet.">ⓘ</span></div>
+          <div style="position:relative;">
+            <input type="text" id="targetSearch" placeholder="Type an enhancive name…" autocomplete="off">
+            <div id="targetSuggestions" class="suggestList"></div>
+          </div>
+          <div id="targetChips" class="chipList"></div>
+          <label class="field" style="display:flex; align-items:center; gap:6px; margin-top:8px; cursor:pointer;" title="Filters out any item that has a &quot;… Ranks&quot; enhancive at all.">
+            <input type="checkbox" id="excludeRanksChk" style="width:auto;"> Exclude all items with ranks
+          </label>
+
+          <label class="field" style="margin-top:10px;">Enhancive Match Minimum <span class="infoIcon" title="How many enhancive matches from &quot;Enhancive Targets&quot; should this item have?">ⓘ</span></label>
+          <input type="number" id="enhMatchMin" placeholder="e.g. 2">
+
+          <div class="subLabel" style="margin-top:14px;">Enhancive Score</div>
+          <div class="row2">
+            <div><label class="field">Min</label><input type="number" id="enhMin" placeholder="e.g. 12"></div>
+            <div><label class="field">Max</label><input type="number" id="enhMax" placeholder="none"></div>
+          </div>
+
+          <div class="subLabel" style="margin-top:14px;">Enh Value <span class="infoIcon" title="Enh Value = enhancive score per 100,000 silvers of price — a rough bang-for-buck metric. Stat bonuses already count double toward the score (their natural x2), so that's baked into Enh Value automatically. Checking &quot;Contextual value&quot; additionally doubles the Enh Value contribution of any ability matching your saved Enhancive Targets — so a targeted stat bonus counts x4 (its natural x2, doubled again), while a targeted rank/normal ability counts x2.">ⓘ</span></div>
+          <div class="row2">
+            <div><label class="field">Min</label><input type="number" id="enhValMin" placeholder="e.g. 5"></div>
+            <div><label class="field">Max</label><input type="number" id="enhValMax" placeholder="none"></div>
+          </div>
+          <label class="field" style="display:flex; align-items:center; gap:6px; margin-top:8px; cursor:pointer;">
+            <input type="checkbox" id="contextualValue" style="width:auto;"> Contextual value
+          </label>
+        </div>
+      </details>
+    </fieldset>
+
+    <fieldset>
+      <legend>Price (silvers)</legend>
+      <div class="row2">
+        <div><label class="field">Min</label><input type="number" id="priceMin" placeholder="0"></div>
+        <div><label class="field">Max</label><input type="number" id="priceMax" placeholder="e.g. 5000000"></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Text Search <span class="infoIcon" title="Item Type / Worn Location / Properties come directly from shops.elanthia.online's own classification engine (loaded live from their site), so they match what you'd see there. If a fresh item slips through anyway, use the raw text box as a catch-all. Text search supports boolean syntax: multiple words are ANDed, &quot;exact phrase&quot; in quotes matches whole words only (so &quot;lock&quot; won't match &quot;lockpick&quot;), -word excludes a term, and OR splits alternatives.">ⓘ</span></legend>
+      <label class="field">Item name contains</label>
+      <input type="text" id="nameContains" placeholder='e.g. ring OR "lock" -pick'>
+      <label class="field">Raw description contains (fallback / free text)</label>
+      <input type="text" id="rawContains" placeholder="e.g. mithril">
+    </fieldset>
+
+    <div class="savebar" style="margin-top:0;">
+      <button id="runCurrentBtn" class="primary" style="flex:2;">Run Current Filters</button>
+      <button id="clearAllBtn" style="flex:1;">Clear All</button>
+    </div>
+
+    <hr class="sectionDivider">
+
+    <fieldset>
+      <legend>Saved Searches</legend>
+      <div class="savebar">
+        <input type="text" id="saveName" placeholder="Search name">
+        <button id="saveBtn">Save</button>
+        <button id="cancelEditBtn" class="mini" style="display:none;">Cancel</button>
+      </div>
+      <ul id="savedList"></ul>
+      <div class="savebar" style="margin-top:10px;">
+        <button id="runSelectedBtn" class="primary" style="flex:1;">Run Selected Saved Search</button>
+      </div>
+    </fieldset>
+  </aside>
+
+  <main>
+    <div id="resultCount"></div>
+    <div id="criteriaSummary"></div>
+    <div id="resultsWrap"></div>
+  </main>
+</div>
+
+<script>
+/* =========================================================
+   CONFIG / VOCAB
+   ========================================================= */
+const BASE = 'https://shops.elanthia.online';
+const CORE_STATS = ['Strength','Constitution','Dexterity','Agility','Discipline','Aura','Logic','Intuition','Wisdom','Influence'];
+const APP_VERSION = '1.7.3';
+function isCoreBonusAbility(name) {
+  return CORE_STATS.some(s => new RegExp('^' + s + '\\s+Bonus\\b', 'i').test((name || '').trim()));
+}
+// Enh Value = enhancive score per 100,000 silvers of price — a rough "bang for buck" metric.
+// Priceless / unpriced items have no meaningful value ratio, so they get null (sorts last).
+function computeEnhValue(score, price) {
+  if (price == null || price <= 0) return null;
+  return (score / price) * 100000;
+}
+// "Contextual value" mode: on top of the natural x2 that core-stat "Bonus" abilities always
+// get, also double the contribution of any ability that matches a saved Enhancive Target —
+// so a targeted stat bonus counts x4 (natural x2, doubled again) and a targeted rank/normal
+// ability counts x2. This only affects the Enh Value column, not Enh. Score.
+let CONTEXTUAL_VALUE = false;
+function computeContextualScore(it) {
+  let score = 0;
+  for (const e of (it.enhancives || [])) {
+    let contribution = isCoreBonusAbility(e.ability) ? e.boost * 2 : e.boost;
+    if (CONTEXTUAL_VALUE && ENHANCIVE_TARGETS.some(t => t.name === e.ability)) contribution *= 2;
+    score += contribution;
+  }
+  return score;
+}
+function refreshEnhValues() {
+  for (const it of ALL_ITEMS) {
+    it.enhValue = computeEnhValue(computeContextualScore(it), it.price);
+  }
+}
+
+const ITEM_TYPES = ['weapon','armor','shield','jewelry','container','gemstone'];
+
+const WORN_LOCATIONS = ['Pin','Head','Hair','Ear','Ears','Neck','Cloak','Shoulders','Chest','Front',
+  'Undershirt','Back','Arms','Wrist','Hands','Finger','Waist','Belt','Pants','Legs','Leggings','Ankle','Socks','Feet'];
+
+// name-keyword -> worn slot, checked in order (first match wins), also used to flag "jewelry"
+const WORN_KEYWORDS = [
+  [/\bpair of earrings?\b/i,'Ears'], [/\bearring\b|\bear stud\b|\bear cuff\b/i,'Ear'],
+  [/\bpin\b|\bbrooch\b|\bbadge\b/i,'Pin'],
+  [/\bcirclet\b|\btiara\b|\bcrown\b|\bhelm\b|\bcap\b|\bcoif\b|\bhood\b|\bheadband\b|\bdiadem\b/i,'Head'],
+  [/\bhair (pin|clip|comb|stick)\b|\bbarrette\b/i,'Hair'],
+  [/\bnecklace\b|\bpendant\b|\btorc\b|\bamulet\b|\bchoker\b|\blocket\b|\bgorget\b/i,'Neck'],
+  [/\bcloak\b|\bcape\b|\bmantle\b/i,'Cloak'],
+  [/\bpauldron\b|\bshoulder ?guard\b/i,'Shoulders'],
+  [/\bbreastplate\b|\bchestpiece\b|\bcorselet\b|\bbrigandine\b|\bvest\b/i,'Chest'],
+  [/\bundershirt\b/i,'Undershirt'],
+  [/\bbackplate\b/i,'Back'],
+  [/\bvambrace\b|\barmguard\b|\bsleeve\b/i,'Arms'],
+  [/\bbracelet\b|\bbracer\b|\bwristband\b|\bwrist cuff\b/i,'Wrist'],
+  [/\bglove\b|\bgauntlet\b|\bmitt\b/i,'Hands'],
+  [/\bring\b/i,'Finger'],
+  [/\bsash\b/i,'Waist'],
+  [/\bbelt\b/i,'Belt'],
+  [/\btrousers\b|\bpants\b|\bbreeches\b/i,'Pants'],
+  [/\bgreaves\b|\blegplate\b/i,'Legs'],
+  [/\bleggings\b/i,'Leggings'],
+  [/\banklet\b/i,'Ankle'],
+  [/\bsocks?\b|\bstockings?\b/i,'Socks'],
+  [/\bboots?\b|\bshoes?\b|\bsandals?\b/i,'Feet'],
+];
+
+const WEAPON_SKILLS = ['edged weapons','blunt weapons','two-handed weapons','twohanded weapons','polearms','polearm weapons','ranged weapons','thrown weapons','brawling'];
+const ARMOR_SKILLS = ['cloth armor','leather armor','scale armor','chain armor','plate armor'];
+
+// Properties filter definitions. Each test(item) runs against the REAL parsed item object
+// produced by the site's own data-loader.js (see loadViaSiteEngine below) when that's available,
+// or against our fallback-parsed item (which has a similar-enough shape) when it's not.
+// 4th field groups each property the same way shops.elanthia.online's own TAG_CATEGORIES does,
+// so the sidebar can nest them into the same buckets the site uses.
+const PROPERTY_CATEGORIES = [
+  ['enhancive', 'Enhancive + Imbed'],
+  ['combat', 'Combat'],
+  ['magical', 'Magical'],
+  ['defensive', 'Defensive'],
+  ['properties', 'Container Properties'],
+  ['special', 'Special Features'],
+];
+const PROPERTY_DEFS = [
+  ['persists','Persists (Enhancive)', it => hasTag(it,'persists'), 'enhancive'],
+  ['crumbly','Crumbly', it => hasTag(it,'crumbly'), 'enhancive'],
+  ['magic_resistant','Magic Resistant', it => hasTag(it,'magic_resistant'), 'enhancive'],
+  // Imbed items use their own "It will persist/disintegrate after its last magical charge
+  // has been expended" phrasing, distinct from the enhancive "...last enhancive charge..." line
+  // above — kept as a separate filter on purpose so the two don't get conflated.
+  ['imbed_persists','Persists (Imbed)', it => /persist(?:s)? after its last magical charge/i.test(itemRawText(it)), 'enhancive'],
+  ['imbed_disintegrates','Disintegrates (Imbed)', it => /disintegrate(?:s)? after its last magical charge/i.test(itemRawText(it)), 'enhancive'],
+  ['dmg_weighting','Damage Weighting', it => !!it.dmg_weighting, 'combat'],
+  ['crit_weighting','Crit Weighting', it => !!it.crit_weighting, 'combat'],
+  ['dmg_padding','Damage Padding', it => !!it.dmg_padding, 'combat'],
+  ['crit_padding','Crit Padding', it => !!it.crit_padding, 'combat'],
+  ['sighting','Sighting', it => it.sighting != null, 'combat'],
+  ['spiked','Spiked', it => hasTag(it,'spiked'), 'combat'],
+  ['forged','Forged Quality', it => !!it.forgedQuality, 'combat'],
+  ['flares','Flares', it => !!(it.flares && it.flares.length) || !!it.flare || hasTag(it,'flares'), 'magical'],
+  ['sanctify','Sanctify', it => it.sanctify != null, 'magical'],
+  ['ensorcell','Ensorcell', it => it.ensorcell != null, 'magical'],
+  ['holy','Holy', it => hasTag(it,'holy'), 'magical'],
+  ['td_bonus','TD Bonus', it => it.td_bonus != null, 'defensive'],
+  ['db_bonus','DB Bonus', it => it.db_bonus != null, 'defensive'],
+  ['defender','Defender', it => it.defender != null && it.defender !== false, 'defensive'],
+  ['capacity','Capacity', it => !!it.capacityLevel, 'properties'],
+  ['max_light','Max Light', it => hasTag(it,'max_light'), 'properties'],
+  ['max_deep','Max Deep', it => hasTag(it,'max_deep'), 'properties'],
+  ['lightenable','Lightenable', it => hasTag(it,'lightenable'), 'properties'],
+  ['deepenable','Deepenable', it => hasTag(it,'deepenable'), 'properties'],
+  ['scripted','Scripted', it => hasTag(it,'scripted'), 'special'],
+  ['imbeddable','Imbeddable', it => hasTag(it,'imbeddable'), 'special'],
+  ['imbedded','Imbedded', it => hasTag(it,'imbedded'), 'special'],
+];
+function hasTag(it, tag) { return !!(it.tags && it.tags.includes(tag)); }
+const PROPERTY_TEST_MAP = Object.fromEntries(PROPERTY_DEFS.map(([id_, label, test]) => [id_, test]));
+const PROPERTY_LABEL_MAP = Object.fromEntries(PROPERTY_DEFS.map(([id_, label]) => [id_, label]));
+
+/* =========================================================
+   FALLBACK PARSER (only used if the site's own JS can't be loaded,
+   e.g. no network access to shops.elanthia.online's /assets/ path)
+   ========================================================= */
+function parseItemFallback(raw, name, id, ctx) {
+  const lines = raw || [];
+  const text = lines.join(' ');
+  const lower = text.toLowerCase();
+
+  // price
+  let price = null;
+  let m = text.match(/will cost ([\d,]+) coins/i);
+  if (m) price = parseInt(m[1].replace(/,/g,''), 10);
+
+  // enchant
+  let enchant = null;
+  m = text.match(/bonus of \+?(\d+) more than usual/i);
+  if (m) enchant = parseInt(m[1], 10);
+
+  // enhancives - use indentation in raw line array
+  const enhancives = [];
+  let inBlock = false;
+  for (const line of lines) {
+    if (/it is an enhancive item:/i.test(line)) { inBlock = true; continue; }
+    if (inBlock) {
+      const isIndented = /^\s+/.test(line) || /^ {2,}/.test(line);
+      if (!isIndented) { inBlock = false; continue; }
+      const bm = line.match(/boost of (\d+) to (.+?)\.?\s*$/i);
+      if (bm) enhancives.push({ boost: parseInt(bm[1],10), ability: bm[2].trim() });
+    }
+  }
+
+  // item type
+  let itemType = 'other';
+  let weaponType = null, armorType = null;
+  m = lower.match(/requires skill in ([a-z\- ]+?) to (use|wear) (it )?effectively/i);
+  if (m) {
+    const skill = m[1].trim();
+    if (WEAPON_SKILLS.some(s => skill.includes(s)) || /brawling/.test(skill)) { itemType = 'weapon'; weaponType = skill; }
+    else if (ARMOR_SKILLS.some(s => skill.includes(s))) { itemType = 'armor'; armorType = skill; }
+    else if (skill.includes('shield')) { itemType = 'shield'; }
+  }
+  if (itemType === 'other' && /requires skill in shield use/i.test(lower)) itemType = 'shield';
+  if (itemType === 'other' && /capable of holding|holds up to|able to hold|has room for|room enough for/i.test(lower)) itemType = 'container';
+
+  // name-keyword fallback for armor pieces that don't carry a "requires skill" line
+  const ARMOR_NAME_RE = /\b(coat-of-plates|buffcoat|breastplate|cuirass|hauberk|brigandine|chain shirt|scale shirt|plate armor|banded mail|chain mail|splint mail|ring mail|studded leather|leather armor|full plate|half plate|plate corselet|coat of plates)\b/i;
+  if (itemType === 'other' && ARMOR_NAME_RE.test(name)) itemType = 'armor';
+
+  // worn location / jewelry via name keywords
+  let wornLocation = null;
+  for (const [re, slot] of WORN_KEYWORDS) {
+    if (re.test(name)) { wornLocation = slot; break; }
+  }
+  if (itemType === 'other' && wornLocation && !/helm|cap|coif|hood|gauntlet|glove|boots?|shoes?|greaves|breastplate|vambrace/i.test(name)) {
+    itemType = 'jewelry';
+  }
+  if (itemType === 'other' && wornLocation && /helm|cap|coif|hood|gauntlet|glove|boots?|shoes?|greaves|breastplate|vambrace|pauldron/i.test(name)) {
+    itemType = 'armor';
+  }
+
+  // gemstone fallback
+  if (itemType === 'other') {
+    if (/property:/i.test(text) || /\bgemstone\b|\bgem\b/i.test(name)) itemType = 'gemstone';
+  }
+
+  // legacy text-pattern tags (only used in fallback mode)
+  const tags = [];
+  const LEGACY_TAG_TESTS = [
+    ['persists', /persist(s)? after its last enhancive charge/i],
+    ['crumbly', /crumble[sd]? to dust|crumbly/i],
+    ['flares', /\bflares?\b/i],
+    ['spiked', /\bspiked\b/i],
+    ['holy', /\bholy\b/i],
+    ['max_light', /maximum amount for a light/i],
+    ['max_deep', /maximum amount for a deep/i],
+    ['chrism', /\bchrism\b/i],
+    ['scripted', /\bscripted\b|has a script/i],
+    ['magic_resistant', /magic.?resistant/i],
+    ['lightenable', /can be lightened|reduce.{0,15}weight/i],
+    ['deepenable', /can be deepened|increase.{0,15}capacity/i],
+    ['imbeddable', /\bimbeddable\b/i],
+    ['imbedded', /\bis imbedded\b|already imbedded/i],
+  ];
+  for (const [id_, re] of LEGACY_TAG_TESTS) if (re.test(lower)) tags.push(id_);
+  const forgedQuality = /forged (by|quality)|master-forged/i.test(lower) ? 'yes' : null;
+  const td_bonus = /target defense/i.test(lower) ? 1 : null;
+  const capacityLevel = /capable of holding|holds up to|able to hold|has room for/i.test(lower) ? 'yes' : null;
+
+  // enhancive score
+  let enhanciveScore = 0;
+  for (const e of enhancives) {
+    const isCoreBonus = isCoreBonusAbility(e.ability);
+    enhanciveScore += isCoreBonus ? e.boost * 2 : e.boost;
+  }
+
+  const enhValue = computeEnhValue(enhanciveScore, price);
+
+  return {
+    id, name, price, enchant, itemType, weaponType, armorType, wornLocation,
+    tags, enhancives, enhanciveScore, enhValue, forgedQuality, td_bonus, capacityLevel, raw: lines,
+    town: ctx.town, shopName: ctx.shopName, shopOwner: ctx.shopOwner, shopId: ctx.shopId, room: ctx.room
+  };
+}
+
+/* =========================================================
+   DATA LOADING
+   ========================================================= */
+let ALL_ITEMS = [];
+let USING_FALLBACK = false;
+
+// Preferred path: load the site's OWN data-loader.js / tag-categories.js scripts and let
+// them fetch + classify every item exactly the way shops.elanthia.online itself does.
+// We patch fetch() so their internal relative paths ("/data/...") resolve against their
+// origin instead of ours, and we stub their DOM-touching UI callbacks (we have our own UI).
+let siteEngineReady = null;
+function loadScriptOnce(src) {
+  if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('failed to load ' + src));
+    document.head.appendChild(s);
+  });
+}
+async function ensureSiteEngine() {
+  if (siteEngineReady) return siteEngineReady;
+  siteEngineReady = (async () => {
+    if (!window.__fetchPatchedForShops) {
+      const origFetch = window.fetch.bind(window);
+      window.fetch = function(input, init) {
+        let url = typeof input === 'string' ? input : input.url;
+        if (!/^https?:\/\//i.test(url)) url = BASE + '/' + url.replace(/^\//, '');
+        return origFetch(url, init);
+      };
+      window.__fetchPatchedForShops = true;
+    }
+    await loadScriptOnce(BASE + '/assets/js/config/tag-categories.js');
+    await loadScriptOnce(BASE + '/assets/js/core/data-loader.js');
+    if (typeof window.dataLoader === 'undefined') throw new Error('dataLoader global not found after script load');
+    // Neutralize their DOM-dependent UI callbacks — we render our own UI.
+    window.dataLoader.showLoading = function () {};
+    window.dataLoader.showError = function () {};
+    window.dataLoader.updateStats = function () {};
+    window.dataLoader.populateTownFilter = function () {};
+    return window.dataLoader;
+  })();
+  return siteEngineReady;
+}
+
+// Self-heal known upstream misclassifications: shops.elanthia.online's own item_type/
+// is_container flags come pre-computed from their data pipeline, and it occasionally
+// mistags a weapon as a container — e.g. "a glaes-tipped mithril chest-ripper" (a polearm)
+// gets flagged as a container purely because its name contains "chest". The item's own
+// "requires skill in X to use/wear effectively" line is a much more reliable signal, so
+// when it disagrees with the type we were handed, trust the skill line instead.
+function healItemType(it) {
+  const text = itemRawText(it).toLowerCase();
+  const m = text.match(/requires skill in ([a-z\- ]+?) to (use|wear) (it )?effectively/i);
+  if (!m) return it;
+  const skill = m[1].trim();
+  let correctType = null;
+  if (WEAPON_SKILLS.some(s => skill.includes(s)) || /brawling/.test(skill)) correctType = 'weapon';
+  else if (ARMOR_SKILLS.some(s => skill.includes(s))) correctType = 'armor';
+  else if (skill.includes('shield')) correctType = 'shield';
+  if (correctType && it.itemType !== correctType) {
+    it.itemType = correctType;
+    it.isWeapon = correctType === 'weapon';
+    it.isArmor = correctType === 'armor';
+    it.isShield = correctType === 'shield';
+    it.isContainer = false;
+    if (correctType === 'weapon' && !it.weaponType) it.weaponType = skill;
+    if (correctType === 'armor' && !it.armorType) it.armorType = skill;
+    it.selfHealed = true;
+  }
+  return it;
+}
+
+function attachEnhanciveScore(it) {
+  let score = 0;
+  for (const e of (it.enhancives || [])) {
+    const isCoreBonus = isCoreBonusAbility(e.ability);
+    score += isCoreBonus ? e.boost * 2 : e.boost;
+  }
+  it.enhanciveScore = score;
+  it.enhValue = computeEnhValue(score, it.price);
+  return it;
+}
+
+async function loadViaSiteEngine() {
+  const dl = await ensureSiteEngine();
+  await dl.loadAllData();
+  const items = dl.getAllItems().map(healItemType).map(attachEnhanciveScore);
+  return items;
+}
+
+async function loadViaFallback() {
+  setStatus('Site engine unavailable — using built-in fallback parser…');
+  const townsResp = await fetch(BASE + '/data/towns.json', { cache: 'no-store' });
+  const townsJson = await townsResp.json();
+  const towns = townsJson.towns;
+  let items = [];
+  let loaded = 0;
+  for (const t of towns) {
+    setStatus(`Loading ${t.town}… (${loaded}/${towns.length})`);
+    try {
+      const r = await fetch(BASE + '/data/' + t.file, { cache: 'no-store' });
+      const j = await r.json();
+      for (const shop of (j.shops || [])) {
+        const ctx = { town: j.town || t.town, shopOwner: shop.shop_owner, shopId: shop.id };
+        for (const inv of (shop.inv || [])) {
+          const roomCtx = Object.assign({}, ctx, { room: inv.room_title });
+          for (const it of (inv.items || [])) {
+            const raw = (it.details && it.details.raw) || [];
+            const parsed = parseItemFallback(raw, it.name, it.id, roomCtx);
+            parsed.wearLocation = parsed.wornLocation;
+            items.push(parsed);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed loading', t.file, e);
+    }
+    loaded++;
+  }
+  return items.map(healItemType);
+}
+
+async function loadAllData() {
+  setStatus('Loading item classification engine from shops.elanthia.online…');
+  try {
+    ALL_ITEMS = await loadViaSiteEngine();
+    USING_FALLBACK = false;
+    setStatus(`Loaded ${ALL_ITEMS.length} items (site engine) · ${new Date().toLocaleString()}`);
+  } catch (e) {
+    console.error('Site engine failed, falling back:', e);
+    USING_FALLBACK = true;
+    ALL_ITEMS = await loadViaFallback();
+    setStatus(`Loaded ${ALL_ITEMS.length} items (fallback parser — some classification may be less accurate) · ${new Date().toLocaleString()}`);
+  }
+  document.getElementById('engineNote').style.display = USING_FALLBACK ? 'block' : 'none';
+  rebuildAbilityNameIndex();
+  refreshEnhValues();
+}
+
+function setStatus(s) { document.getElementById('status').textContent = s; }
+
+/* =========================================================
+   ENHANCIVE TARGETS — pick specific enhancive abilities (e.g. "Influence Bonus") to
+   highlight and pin to the top of results, independent of whatever search is running.
+   ========================================================= */
+let ENHANCIVE_TARGETS = []; // array of { name, min: number|null }
+let ENHANCIVE_ABILITY_NAMES = [];
+const LS_TARGETS_KEY = 'gs4_enh_hunter_targets_v1';
+
+function loadTargets() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_TARGETS_KEY)) || [];
+    // Migrate from the old format (plain array of ability name strings).
+    ENHANCIVE_TARGETS = raw.map(t => typeof t === 'string' ? { name: t, min: null } : { name: t.name, min: t.min ?? null });
+  } catch (e) { ENHANCIVE_TARGETS = []; }
+}
+function saveTargets() { localStorage.setItem(LS_TARGETS_KEY, JSON.stringify(ENHANCIVE_TARGETS)); }
+function targetNames() { return ENHANCIVE_TARGETS.map(t => t.name); }
+function findTarget(name) { return ENHANCIVE_TARGETS.find(t => t.name === name); }
+
+function rebuildAbilityNameIndex() {
+  const set = new Set();
+  for (const it of ALL_ITEMS) {
+    for (const e of (it.enhancives || [])) {
+      if (e.ability) set.add(e.ability);
+    }
+  }
+  ENHANCIVE_ABILITY_NAMES = Array.from(set).sort();
+}
+
+// Counts how many distinct enhancive lines on an item satisfy a target ability (and its
+// per-target minimum value, if set) from the given target list. Used both for the yes/no
+// pin-to-top highlighting (against the globally-active ENHANCIVE_TARGETS) and for the
+// "Enhancive Match Minimum" count filter (against whichever search's own target list is
+// being evaluated, so it stays correct when running multiple saved searches together).
+function countTargetMatchesAgainst(it, targets) {
+  if (!targets || !targets.length) return 0;
+  let count = 0;
+  for (const e of (it.enhancives || [])) {
+    const t = targets.find(x => x.name === e.ability);
+    if (!t) continue;
+    if (t.min != null && e.boost < t.min) continue;
+    count++;
+  }
+  return count;
+}
+function countTargetMatches(it) {
+  return countTargetMatchesAgainst(it, ENHANCIVE_TARGETS);
+}
+function itemHasTarget(it) {
+  return countTargetMatches(it) > 0;
+}
+
+function renderTargetChips() {
+  const el = document.getElementById('targetChips');
+  el.innerHTML = ENHANCIVE_TARGETS.map((t, i) => `
+    <span class="chip${isCoreBonusAbility(t.name) ? ' chip-gold' : ''}">
+      <span class="chip-name" data-idx="${i}" title="Click to set a minimum value">${escapeHtml(t.name)}${t.min != null ? ` (min ${t.min})` : ''}</span>
+      <button data-idx="${i}" title="Remove">✕</button>
+    </span>
+  `).join('');
+  updateEnhFilterBadge();
+}
+
+function addTarget(name) {
+  if (!name || ENHANCIVE_TARGETS.some(t => t.name === name)) return;
+  ENHANCIVE_TARGETS.push({ name, min: null });
+  saveTargets();
+  persistFormState();
+  renderTargetChips();
+  refreshEnhValues();
+  sortAndRender();
+}
+function removeTargetAt(idx) {
+  ENHANCIVE_TARGETS.splice(idx, 1);
+  saveTargets();
+  persistFormState();
+  renderTargetChips();
+  refreshEnhValues();
+  sortAndRender();
+}
+function setTargetMin(idx) {
+  const t = ENHANCIVE_TARGETS[idx];
+  if (!t) return;
+  const input = prompt('Enter the minimum value for this enhancive to search for:', t.min != null ? String(t.min) : '');
+  if (input === null) return; // cancelled
+  const trimmed = input.trim();
+  if (trimmed === '') {
+    t.min = null;
+  } else {
+    const n = Number(trimmed);
+    if (Number.isNaN(n)) { alert('Please enter a number.'); return; }
+    t.min = n;
+  }
+  saveTargets();
+  persistFormState();
+  renderTargetChips();
+  refreshEnhValues();
+  sortAndRender();
+}
+
+document.getElementById('targetChips').addEventListener('click', (e) => {
+  const idx = e.target.dataset.idx;
+  if (idx === undefined) return;
+  if (e.target.classList.contains('chip-name')) setTargetMin(Number(idx));
+  else removeTargetAt(Number(idx));
+});
+
+const targetSearchEl = document.getElementById('targetSearch');
+const targetSuggestEl = document.getElementById('targetSuggestions');
+targetSearchEl.addEventListener('input', () => {
+  const q = targetSearchEl.value.trim().toLowerCase();
+  if (!q) { targetSuggestEl.classList.remove('show'); targetSuggestEl.innerHTML = ''; return; }
+  const existing = targetNames();
+  const matches = ENHANCIVE_ABILITY_NAMES
+    .filter(n => n.toLowerCase().includes(q) && !existing.includes(n))
+    .slice(0, 25);
+  targetSuggestEl.innerHTML = matches.length
+    ? matches.map(n => `<div data-name="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('')
+    : '<div style="color:var(--muted);cursor:default;">No matches</div>';
+  targetSuggestEl.classList.add('show');
+});
+targetSuggestEl.addEventListener('click', (e) => {
+  const name = e.target.dataset.name;
+  if (!name) return;
+  addTarget(name);
+  targetSearchEl.value = '';
+  targetSuggestEl.classList.remove('show');
+  targetSuggestEl.innerHTML = '';
+});
+document.addEventListener('click', (e) => {
+  if (e.target !== targetSearchEl && !targetSuggestEl.contains(e.target)) {
+    targetSuggestEl.classList.remove('show');
+  }
+});
+
+/* =========================================================
+   UI BUILD - three independent, each-individually-nestable filter sections:
+   Item Type, Worn Location, and Properties (grouped into sub-categories,
+   the same way shops.elanthia.online's own "Special Properties" groupings work).
+   ========================================================= */
+const PROPERTY_LABEL_BY_ID = Object.fromEntries(PROPERTY_DEFS.map(([id_, label]) => [id_, label]));
+
+function checkboxHtml(role, value, label, idPrefix) {
+  const id = idPrefix + '_' + value.replace(/[^a-z0-9]/gi, '');
+  return `<label class="chk"><input type="checkbox" data-role="${role}" value="${value}" id="${id}"> ${escapeHtml(label)}</label>`;
+}
+
+// Flat checkbox grid (used for Item Type and Worn Location).
+function buildFlatGrid(containerId, role, values, idPrefix) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = values.map(v => {
+    const label = v.charAt(0).toUpperCase() + v.slice(1);
+    return checkboxHtml(role, v, label, idPrefix);
+  }).join('');
+}
+
+// Properties gets its own collapsible sub-groups (Enhancive / Combat / Magical / Defensive /
+// Container Properties / Special Features) so it can be nested independently of Item Type.
+function buildPropertyTree() {
+  const el = document.getElementById('propTree');
+  const byCategory = {};
+  for (const [id_, label, test, cat] of PROPERTY_DEFS) {
+    (byCategory[cat] = byCategory[cat] || []).push([id_, label]);
+  }
+  el.innerHTML = PROPERTY_CATEGORIES.map(([catId, catLabel]) => {
+    const items = byCategory[catId] || [];
+    if (!items.length) return '';
+    return `
+      <details open>
+        <summary><span class="subLabel" style="margin:0;">${escapeHtml(catLabel)}</span></summary>
+        <div class="treeBody">
+          <div class="chkgrid">${items.map(([id_, label]) => checkboxHtml('property', id_, label, `pr_${catId}`)).join('')}</div>
+        </div>
+      </details>
+    `;
+  }).join('');
+}
+
+buildFlatGrid('itemTypeGrid', 'itemtype', ITEM_TYPES, 'it');
+buildFlatGrid('wornGrid', 'worn', WORN_LOCATIONS, 'wl');
+buildPropertyTree();
+
+function getChecked(role) {
+  const seen = new Set();
+  document.querySelectorAll(`[data-role="${role}"]:checked`).forEach(i => seen.add(i.value));
+  return Array.from(seen);
+}
+function setChecked(role, values) {
+  const vals = values || [];
+  document.querySelectorAll(`[data-role="${role}"]`).forEach(i => { i.checked = vals.includes(i.value); });
+}
+
+// Show a small "N selected" badge next to collapsed sections so picking is still visible
+// without expanding — updates on every checkbox change.
+function updateCollapsedBadges() {
+  const itCount = getChecked('itemtype').length;
+  const wlCount = getChecked('worn').length;
+  const prCount = getChecked('property').length;
+  document.getElementById('itemTypeCount').textContent = itCount ? `${itCount} selected` : '';
+  document.getElementById('wornCount').textContent = wlCount ? `${wlCount} selected` : '';
+  document.getElementById('propertyCount').textContent = prCount ? `${prCount} selected` : '';
+}
+updateCollapsedBadges();
+document.getElementById('itemTypeGrid').addEventListener('change', updateCollapsedBadges);
+document.getElementById('wornGrid').addEventListener('change', updateCollapsedBadges);
+document.getElementById('propTree').addEventListener('change', updateCollapsedBadges);
+
+// Same idea for the Enhancive Filtering box — badge shows how many saved targets are active.
+function updateEnhFilterBadge() {
+  const n = ENHANCIVE_TARGETS.length;
+  document.getElementById('enhFilterCount').textContent = n ? `${n} target${n === 1 ? '' : 's'}` : '';
+}
+
+/* =========================================================
+   FILTER STATE <-> FORM
+   ========================================================= */
+function readFilterForm() {
+  return {
+    itemTypes: getChecked('itemtype'),
+    wornLocations: getChecked('worn'),
+    properties: getChecked('property'),
+    enhMin: numOrNull('enhMin'), enhMax: numOrNull('enhMax'),
+    enhValMin: numOrNull('enhValMin'), enhValMax: numOrNull('enhValMax'),
+    enhMatchMin: numOrNull('enhMatchMin'),
+    excludeRanks: document.getElementById('excludeRanksChk').checked,
+    priceMin: numOrNull('priceMin'), priceMax: numOrNull('priceMax'),
+    nameContains: document.getElementById('nameContains').value.trim(),
+    rawContains: document.getElementById('rawContains').value.trim(),
+    targets: ENHANCIVE_TARGETS.map(t => ({ name: t.name, min: t.min ?? null })),
+  };
+}
+function applyTargets(targets) {
+  ENHANCIVE_TARGETS = Array.isArray(targets)
+    ? targets.map(t => typeof t === 'string' ? { name: t, min: null } : { name: t.name, min: t.min ?? null })
+    : [];
+  saveTargets();
+  renderTargetChips();
+  refreshEnhValues();
+}
+function writeFilterForm(f) {
+  applyTargets(f.targets);
+  setChecked('itemtype', f.itemTypes);
+  setChecked('worn', f.wornLocations);
+  setChecked('property', f.properties);
+  // expand any <details> that now contains a checked box, so the loaded search is visible
+  document.querySelectorAll('#propTree details, #itemTypeDetails, #wornDetails, #propertiesDetails').forEach(d => {
+    if (d.querySelector('input:checked')) d.open = true;
+  });
+  updateCollapsedBadges();
+  document.getElementById('enhMin').value = f.enhMin ?? '';
+  document.getElementById('enhMax').value = f.enhMax ?? '';
+  document.getElementById('enhValMin').value = f.enhValMin ?? '';
+  document.getElementById('enhValMax').value = f.enhValMax ?? '';
+  document.getElementById('enhMatchMin').value = f.enhMatchMin ?? '';
+  document.getElementById('excludeRanksChk').checked = !!f.excludeRanks;
+  document.getElementById('priceMin').value = f.priceMin ?? '';
+  document.getElementById('priceMax').value = f.priceMax ?? '';
+  document.getElementById('nameContains').value = f.nameContains || '';
+  document.getElementById('rawContains').value = f.rawContains || '';
+}
+function numOrNull(id) {
+  const v = document.getElementById(id).value;
+  return v === '' ? null : Number(v);
+}
+
+function itemRawText(item) {
+  if (item.raw && item.raw.length) return item.raw.join(' ');
+  if (item.searchText) return item.searchText;
+  return item.name || '';
+}
+
+// Same content as itemRawText but newline-joined — used for the "Recall Line" reveal so the
+// full description reads the way it would in-game rather than as one run-on line.
+function itemFullText(item) {
+  if (item.raw && item.raw.length) return item.raw.join('\n');
+  if (item.searchText) return item.searchText;
+  return item.name || '';
+}
+
+// Boolean text search: bare words are ANDed and match as substrings (old behavior).
+// "quoted phrases" match as whole words/phrases only — so "lock" won't match "lockpick"
+// or "locksmith". -word / -"phrase" excludes a term. OR splits alternative groups.
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function tokenizeTextQuery(q) {
+  const tokens = [];
+  const re = /(?<neg1>-)?"(?<phrase>[^"]*)"|(?<neg2>-)?(?<word>\S+)/g;
+  let m;
+  while ((m = re.exec(q))) {
+    const g = m.groups;
+    if (g.phrase !== undefined) {
+      if (g.phrase) tokens.push({ text: g.phrase, quoted: true, negate: !!g.neg1 });
+    } else if (g.word !== undefined) {
+      if (/^or$/i.test(g.word)) { tokens.push({ or: true }); continue; }
+      tokens.push({ text: g.word, quoted: false, negate: !!g.neg2 });
+    }
+  }
+  return tokens;
+}
+function matchesTextQuery(haystack, query) {
+  const q = (query || '').trim();
+  if (!q) return true;
+  const hay = (haystack || '');
+  const hayLower = hay.toLowerCase();
+  const tokens = tokenizeTextQuery(q);
+  const groups = [[]];
+  for (const t of tokens) {
+    if (t.or) { groups.push([]); continue; }
+    groups[groups.length - 1].push(t);
+  }
+  return groups.some(group => {
+    if (!group.length) return false;
+    return group.every(t => {
+      const term = t.text.toLowerCase();
+      if (!term) return true;
+      const isMatch = t.quoted
+        ? new RegExp('\\b' + escapeRegex(term) + '\\b', 'i').test(hay)
+        : hayLower.includes(term);
+      return t.negate ? !isMatch : isMatch;
+    });
+  });
+}
+
+function matchesFilter(item, f) {
+  if (f.itemTypes.length && !f.itemTypes.includes(item.itemType)) return false;
+  if (f.wornLocations.length) {
+    const loc = (item.wearLocation || item.wornLocation || '').toLowerCase();
+    if (!f.wornLocations.some(w => w.toLowerCase() === loc)) return false;
+  }
+  if (f.properties.length && !f.properties.every(p => PROPERTY_TEST_MAP[p] ? PROPERTY_TEST_MAP[p](item) : false)) return false;
+  if (f.enhMin != null && item.enhanciveScore < f.enhMin) return false;
+  if (f.enhMax != null && item.enhanciveScore > f.enhMax) return false;
+  if (f.enhValMin != null && (item.enhValue == null || item.enhValue < f.enhValMin)) return false;
+  if (f.enhValMax != null && (item.enhValue == null || item.enhValue > f.enhValMax)) return false;
+  if (f.excludeRanks && (item.enhancives || []).some(e => /\bRanks$/i.test((e.ability || '').trim()))) return false;
+  if (f.enhMatchMin != null && countTargetMatchesAgainst(item, f.targets) < f.enhMatchMin) return false;
+  if (f.priceMin != null && (item.price == null || item.price < f.priceMin)) return false;
+  if (f.priceMax != null && (item.price == null || item.price > f.priceMax)) return false;
+  if (f.nameContains && !matchesTextQuery(item.name, f.nameContains)) return false;
+  if (f.rawContains && !matchesTextQuery(itemRawText(item), f.rawContains)) return false;
+  return true;
+}
+
+/* =========================================================
+   SAVED SEARCHES (localStorage)
+   ========================================================= */
+const LS_KEY = 'gs4_enh_hunter_saved_searches_v1';
+function getSaved() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch(e) { return []; } }
+function setSaved(arr) { localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+
+let editingIdx = null;
+
+function renderSavedList() {
+  const saved = getSaved();
+  const ul = document.getElementById('savedList');
+  ul.innerHTML = saved.map((s,i) => `
+    <li class="${i === editingIdx ? 'editing' : ''}">
+      <input type="checkbox" class="savedChk" data-idx="${i}">
+      <span class="name" data-idx="${i}" title="Click to load into filters">${escapeHtml(s.name)}</span>
+      <button class="mini" data-act="edit" data-idx="${i}" title="Edit name and criteria">Edit</button>
+      <button class="mini" data-act="run" data-idx="${i}">Run</button>
+      <button class="mini danger" data-act="del" data-idx="${i}">✕</button>
+    </li>
+  `).join('') || '<div class="helpNote">No saved searches yet.</div>';
+}
+function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function enterEditMode(idx) {
+  const saved = getSaved();
+  const s = saved[idx];
+  if (!s) return;
+  editingIdx = idx;
+  writeFilterForm(s.filters);
+  document.getElementById('saveName').value = s.name;
+  document.getElementById('saveBtn').textContent = 'Update';
+  document.getElementById('cancelEditBtn').style.display = '';
+  document.getElementById('saveName').focus();
+  renderSavedList();
+}
+function exitEditMode() {
+  editingIdx = null;
+  document.getElementById('saveName').value = '';
+  document.getElementById('saveBtn').textContent = 'Save';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  renderSavedList();
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const name = document.getElementById('saveName').value.trim();
+  if (!name) { alert('Enter a name for this search.'); return; }
+  const saved = getSaved();
+  const filters = readFilterForm();
+  if (editingIdx != null) {
+    saved[editingIdx] = { name, filters };
+    setSaved(saved);
+    exitEditMode();
+    return;
+  }
+  const existingIdx = saved.findIndex(s => s.name === name);
+  if (existingIdx >= 0) saved[existingIdx].filters = filters;
+  else saved.push({ name, filters });
+  setSaved(saved);
+  document.getElementById('saveName').value = '';
+  renderSavedList();
+});
+
+document.getElementById('cancelEditBtn').addEventListener('click', () => {
+  exitEditMode();
+});
+
+document.getElementById('savedList').addEventListener('click', (e) => {
+  const idx = e.target.dataset.idx;
+  if (idx === undefined) return;
+  const saved = getSaved();
+  if (e.target.classList.contains('name')) {
+    // Loading a different search into the form while mid-edit would otherwise let a
+    // subsequent "Update" click silently save it over whatever entry was being edited.
+    if (editingIdx !== null && editingIdx !== Number(idx)) exitEditMode();
+    writeFilterForm(saved[idx].filters);
+    runFilter(readFilterForm(), [saved[idx].name]);
+  } else if (e.target.dataset.act === 'edit') {
+    enterEditMode(Number(idx));
+  } else if (e.target.dataset.act === 'run') {
+    if (editingIdx !== null && editingIdx !== Number(idx)) exitEditMode();
+    writeFilterForm(saved[idx].filters);
+    persistFormState();
+    runFilter(saved[idx].filters, [saved[idx].name]);
+  } else if (e.target.dataset.act === 'del') {
+    saved.splice(idx,1);
+    setSaved(saved);
+    if (editingIdx === Number(idx)) exitEditMode();
+    else renderSavedList();
+  }
+});
+
+document.getElementById('runSelectedBtn').addEventListener('click', () => {
+  if (editingIdx !== null) exitEditMode();
+  const saved = getSaved();
+  const idxs = Array.from(document.querySelectorAll('.savedChk:checked')).map(c => Number(c.dataset.idx));
+  if (!idxs.length) { alert('Check one or more saved searches first.'); return; }
+  runMultiple(idxs.map(i => saved[i]));
+});
+
+document.getElementById('runCurrentBtn').addEventListener('click', () => {
+  runFilter(readFilterForm(), ['Current filters']);
+});
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (editingIdx !== null) exitEditMode();
+  writeFilterForm({
+    itemTypes: [], wornLocations: [], properties: [],
+    enhMin: null, enhMax: null, enhValMin: null, enhValMax: null, enhMatchMin: null,
+    excludeRanks: false, priceMin: null, priceMax: null,
+    nameContains: '', rawContains: '', targets: [],
+  });
+  CONTEXTUAL_VALUE = false;
+  document.getElementById('contextualValue').checked = false;
+  refreshEnhValues();
+  persistFormState();
+  currentRows = [];
+  document.getElementById('resultCount').textContent = '';
+  document.getElementById('criteriaSummary').textContent = '';
+  document.getElementById('resultsWrap').innerHTML = '<div class="empty">No items match yet. Set filters and click "Run Current Filters", or run a saved search.</div>';
+});
+
+document.getElementById('contextualValue').addEventListener('change', (e) => {
+  CONTEXTUAL_VALUE = e.target.checked;
+  refreshEnhValues();
+  sortAndRender();
+});
+
+/* =========================================================
+   RUN / RENDER RESULTS
+   ========================================================= */
+function describeFilters(f) {
+  const parts = [];
+  if (f.itemTypes && f.itemTypes.length) parts.push(`Type: ${f.itemTypes.join(', ')}`);
+  if (f.wornLocations && f.wornLocations.length) parts.push(`Worn: ${f.wornLocations.join(', ')}`);
+  if (f.properties && f.properties.length) parts.push(`Properties: ${f.properties.map(p => PROPERTY_LABEL_MAP[p] || p).join(', ')}`);
+  if (f.enhMin != null || f.enhMax != null) parts.push(`Enh Score: ${f.enhMin ?? 0}–${f.enhMax ?? '∞'}`);
+  if (f.enhValMin != null || f.enhValMax != null) parts.push(`Enh Value: ${f.enhValMin ?? 0}–${f.enhValMax ?? '∞'}`);
+  if (f.excludeRanks) parts.push('Excluding Ranks');
+  if (f.priceMin != null || f.priceMax != null) parts.push(`Price: ${(f.priceMin ?? 0).toLocaleString()}–${f.priceMax != null ? f.priceMax.toLocaleString() : '∞'}`);
+  if (f.nameContains) parts.push(`Name: ${f.nameContains}`);
+  if (f.rawContains) parts.push(`Raw text: ${f.rawContains}`);
+  if (f.targets && f.targets.length) parts.push(`Targets: ${f.targets.map(t => t.min != null ? `${t.name} (min ${t.min})` : t.name).join(', ')}`);
+  if (f.enhMatchMin != null) parts.push(`Enh Match Min: ${f.enhMatchMin}`);
+  if (CONTEXTUAL_VALUE) parts.push('Contextual value on');
+  return parts.length ? parts.join(' · ') : 'No filters applied';
+}
+
+function runFilter(filters, matchLabels) {
+  const matched = ALL_ITEMS.filter(it => matchesFilter(it, filters));
+  renderResults(matched.map(it => ({ item: it, matches: matchLabels })), filters);
+}
+
+function runMultiple(searches) {
+  // The visible filter form (and targets) should reflect whichever saved search was
+  // processed last, not a merge of all of them.
+  if (searches.length) {
+    writeFilterForm(searches[searches.length - 1].filters);
+    persistFormState();
+  }
+
+  const byId = new Map();
+  for (const s of searches) {
+    for (const it of ALL_ITEMS) {
+      if (matchesFilter(it, s.filters)) {
+        if (!byId.has(it.id)) byId.set(it.id, { item: it, matches: [] });
+        byId.get(it.id).matches.push(s.name);
+      }
+    }
+  }
+  renderResults(Array.from(byId.values()), readFilterForm());
+}
+
+let currentSort = { key: 'enhanciveScore', dir: -1 };
+
+function renderResults(rows, filtersForSummary) {
+  currentRows = rows;
+  document.getElementById('resultCount').textContent = `${rows.length} item(s) found`;
+  document.getElementById('criteriaSummary').textContent = filtersForSummary ? describeFilters(filtersForSummary) : '';
+  sortAndRender();
+}
+let currentRows = [];
+
+function sortAndRender() {
+  const rows = currentRows.slice();
+  const { key, dir } = currentSort;
+  rows.sort((a,b) => {
+    let av = a.item[key], bv = b.item[key];
+    if (av == null) av = -Infinity; if (bv == null) bv = -Infinity;
+    if (typeof av === 'string') return av.localeCompare(bv) * dir;
+    return (av - bv) * dir;
+  });
+
+  // Enhancive Targets always float to the top, on top of whatever sort is active.
+  // Array.sort is stable, so this preserves the sort order within each partition.
+  let finalRows = rows;
+  if (ENHANCIVE_TARGETS.length) {
+    const matched = rows.filter(r => itemHasTarget(r.item));
+    const unmatched = rows.filter(r => !itemHasTarget(r.item));
+    finalRows = matched.concat(unmatched);
+  }
+
+  if (!finalRows.length) {
+    document.getElementById('resultsWrap').innerHTML = '<div class="empty">No items match yet. Set filters and click "Run Current Filters", or run a saved search.</div>';
+    return;
+  }
+
+  const html = `
+  <table>
+    <thead><tr>
+      <th data-key="name">Item</th>
+      <th data-key="price">Price</th>
+      <th data-key="itemType">Type</th>
+      <th data-key="wearLocation">Worn</th>
+      <th>Enhancives</th>
+      <th data-key="enhanciveScore">Enh. Score</th>
+      <th data-key="enhValue">Enh Value</th>
+      <th>Properties</th>
+      <th data-key="town">Town / Shop</th>
+      <th>Matched Search</th>
+      <th>Recall Line</th>
+    </tr></thead>
+    <tbody>
+      ${finalRows.map(r => renderRow(r)).join('')}
+    </tbody>
+  </table>`;
+  document.getElementById('resultsWrap').innerHTML = html;
+  document.getElementById('resultsWrap').querySelectorAll('.recallBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const it = ALL_ITEMS.find(i => String(i.id) === id);
+      const target = document.getElementById('recall_' + id);
+      if (!it || !target) return;
+      target.textContent = itemFullText(it);
+      btn.style.display = 'none';
+    });
+  });
+  document.querySelectorAll('th[data-key]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (currentSort.key === key) currentSort.dir *= -1;
+      else currentSort = { key, dir: -1 };
+      sortAndRender();
+    });
+  });
+}
+
+// Pull the imbed spell name + charge count (current and, when the description discloses a
+// recharge amount, an implied maximum) straight out of the item's raw description text.
+// Also flags whether the imbed itself persists or disintegrates once its charges run out —
+// deliberately separate from the enhancive persist/crumble phrasing.
+function getImbedInfo(it) {
+  const text = itemRawText(it);
+  let spell = null, current = null, additional = null, activator = null;
+  let m = text.match(/currently imbedded with the (.+?) spell/i);
+  if (m) spell = m[1].trim();
+  m = text.match(/It has (\d+) charges?\./i);
+  if (m) current = parseInt(m[1], 10);
+  m = text.match(/charged for an additional (\d+)/i);
+  if (m) additional = parseInt(m[1], 10);
+  m = text.match(/activated by (.+?)\./i);
+  if (m) activator = m[1].trim();
+  const persists = /persist(?:s)? after its last magical charge/i.test(text);
+  const disintegrates = /disintegrate(?:s)? after its last magical charge/i.test(text);
+  if (!spell && current == null && !persists && !disintegrates) return null;
+  return {
+    spell, current, additional,
+    max: (current != null && additional != null) ? current + additional : null,
+    activator, persists, disintegrates,
+  };
+}
+
+function renderRow(r) {
+  const it = r.item;
+  const isTargetHit = itemHasTarget(it);
+  const enhLines = it.enhancives.map(e => {
+    const isCoreBonus = isCoreBonusAbility(e.ability);
+    const isTarget = ENHANCIVE_TARGETS.some(t => t.name === e.ability);
+    const cls = isCoreBonus ? 'enh-line enh-doubled' : 'enh-line';
+    // Every core-stat "Bonus" (2x value) ability is always gold. Ranks / normal (1x)
+    // bonuses are only highlighted green when they match a saved Enhancive Target.
+    // Target matches also get a subtle ring so they stand out either way.
+    let boxClass = null;
+    if (isCoreBonus) boxClass = 'enh-target-hit-gold';
+    else if (isTarget) boxClass = 'enh-target-hit';
+    const abilityHtml = boxClass
+      ? `<span class="${boxClass}">${escapeHtml(e.ability)}</span>`
+      : escapeHtml(e.ability);
+    return `<div class="${cls}"><b>+${e.boost}</b> ${abilityHtml}</div>`;
+  }).join('');
+  const imbed = getImbedInfo(it);
+  let imbedHtml = '';
+  if (imbed) {
+    const parts = [];
+    if (imbed.spell) parts.push(`Imbed: <b>${escapeHtml(imbed.spell)}</b>`);
+    if (imbed.current != null) {
+      parts.push(imbed.max != null ? `${imbed.current} charges (max ${imbed.max})` : `${imbed.current} charges`);
+    }
+    if (imbed.activator) parts.push(`via ${escapeHtml(imbed.activator)}`);
+    if (imbed.persists) parts.push('persists after last charge');
+    if (imbed.disintegrates) parts.push('disintegrates after last charge');
+    if (parts.length) imbedHtml = `<div class="enh-line imbed-line">${parts.join(' &middot; ')}</div>`;
+  }
+  const uniqueTags = Array.from(new Set(it.tags || []));
+  const capacityBadge = it.capacityLevel ? `<span class="capacityBadge">Capacity: ${escapeHtml(String(it.capacityLevel))}</span>` : '';
+  const tagHtml = `<div class="taglist">${capacityBadge}${uniqueTags.map(t => `<span>${t}</span>`).join('')}</div>`;
+  const worn = it.wearLocation || it.wornLocation || '—';
+  const shopLabel = it.shopOwner ? escapeHtml(it.shopOwner) : (it.shopName ? escapeHtml(it.shopName) : '');
+  const shopLink = buildShopLink(it);
+  const linkHtml = shopLink
+    ? `<a class="shopLinkIcon" href="${escapeHtml(shopLink)}" target="_blank" rel="noopener" title="View on shops.elanthia.online">🔗</a>`
+    : '';
+  return `<tr class="${isTargetHit ? 'target-hit-row' : ''}">
+    <td><a class="itemname" href="#" title="${escapeHtml(itemRawText(it).slice(0,400))}">${escapeHtml(it.name)}</a></td>
+    <td class="price">${it.price != null ? it.price.toLocaleString() : '—'}</td>
+    <td>${it.itemType || 'other'}${it.selfHealed ? ' <span class="healedMark" title="Reclassified locally — shops.elanthia.online\'s own data mistagged this item; we corrected it based on its “requires skill in…” line.">⚕</span>' : ''}</td>
+    <td>${escapeHtml(String(worn))}</td>
+    <td>${(enhLines + imbedHtml) || '—'}</td>
+    <td class="score">${it.enhanciveScore || '—'}</td>
+    <td class="score">${it.enhValue != null ? it.enhValue.toFixed(2) : '—'}</td>
+    <td>${tagHtml}</td>
+    <td>${escapeHtml(it.town || '')}${shopLabel ? ' / ' + shopLabel : ''}</td>
+    <td>${(r.matches||[]).map(m => `<span class="badge">${escapeHtml(m)}</span>`).join('')}</td>
+    <td>
+      <span class="recallRow">
+        <button class="mini recallBtn" data-id="${escapeHtml(String(it.id))}">Get Recall Line</button>
+        ${linkHtml}
+      </span>
+      <div class="recallText" id="recall_${escapeHtml(String(it.id))}"></div>
+    </td>
+  </tr>`;
+}
+function buildShopLink(it) {
+  if (it.id == null || it.shopId == null || !it.town) return null;
+  const p = new URLSearchParams({ item: String(it.id), shop: String(it.shopId), town: String(it.town) });
+  return `${BASE}/?${p.toString()}`;
+}
+
+/* =========================================================
+   PERSIST CURRENT FILTER FORM ACROSS RELOADS
+   ========================================================= */
+const LS_FORM_KEY = 'gs4_enh_hunter_current_form_v1';
+function persistFormState() { localStorage.setItem(LS_FORM_KEY, JSON.stringify(readFilterForm())); }
+function restoreFormState() {
+  try {
+    const f = JSON.parse(localStorage.getItem(LS_FORM_KEY));
+    if (f) { writeFilterForm(f); return true; }
+  } catch(e) {}
+  return false;
+}
+document.querySelectorAll('input').forEach(el => el.addEventListener('change', persistFormState));
+document.querySelectorAll('input[type=text],input[type=number]').forEach(el => el.addEventListener('input', persistFormState));
+
+/* =========================================================
+   INIT
+   ========================================================= */
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+  document.getElementById('refreshBtn').disabled = true;
+  await loadAllData();
+  document.getElementById('refreshBtn').disabled = false;
+  // re-run whatever is currently on screen
+  if (currentRows.length || document.getElementById('resultsWrap').innerHTML) {
+    runFilter(readFilterForm(), ['Current filters']);
+  }
+});
+
+(async function init() {
+  renderSavedList();
+  // Targets live inside the current-form state (and are also embedded per-saved-search).
+  // As a safety net against a corrupted/partial current-form blob, also fall back to the
+  // standalone targets key whenever the restored form came back with no targets at all.
+  const restored = restoreFormState();
+  if (!restored || !ENHANCIVE_TARGETS.length) {
+    loadTargets();
+    renderTargetChips();
+    refreshEnhValues();
+  }
+  document.getElementById('refreshBtn').disabled = true;
+  await loadAllData();
+  document.getElementById('refreshBtn').disabled = false;
+})();
+</script>
+<div id="appVersion"></div>
+<script>document.getElementById('appVersion').textContent = 'v' + APP_VERSION;</script>
+</body>
+</html>

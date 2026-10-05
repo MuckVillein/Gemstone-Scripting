@@ -97,8 +97,9 @@
   }
 
   /* Noise lines we never echo in a window (state is read separately). */
-  const NOISE = [/^You also see/, /^Also here:/, /^Obvious paths:/, /^Your worn items are:/, /^\s*[a-z].*\bworn\b/, /^\s*$/];
-  function isNoise(text) { return NOISE.some((re) => re.test(text)); }
+  const NOISE = [/^You also see/, /^You notice /, /^Also here:/, /^Obvious paths:/, /^Your worn items are:/,
+    /^[!A-Za-z]*>$/, /^\s*$/];
+  function isNoise(text) { const t = String(text).replace(/^\s+/, ''); return NOISE.some((re) => re.test(t)); }
 
   const api = { decode, stripTags, parseTime, hmsToSecs, secsToHms, readState, classify, isNoise };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

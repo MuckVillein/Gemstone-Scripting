@@ -1,0 +1,131 @@
+=begin
+  Darloop.lic
+
+  Loops tdusk: waits for tdusk to pause itself, go2's to 26841 to rest until
+  Field Exp drops to 600 or below, then go2's back to 23780 and relaunches
+  tdusk. Travel is plain go2 both ways - no manual wagon/event transport
+  steps, go2 handles that itself.
+
+  No DownstreamHook, no want_script_output, no background thread - nothing
+  runs on every line of game text, ever, including during the long stretch
+  where tdusk is actively fighting. That matters: a prior version kept a
+  DownstreamHook installed for the whole session to track Field Exp/scrip,
+  and severe lag turned up the first time it ran across an extended
+  uninterrupted tdusk combat run. Cheap as that hook was per line, it's the
+  one thing that changed, so it's gone rather than argued about.
+
+  - Pause detection: polls the tdusk Script object's own paused? state
+    directly (Script.running/Script.hidden), a couple times a second while
+    idle - not a per-line hook.
+  - Field Exp reading: dothistimeout('exp', ...) - sends the command and
+    reads the response off this script's own buffer, synchronously, only
+    when we actually ask for it during the rest loop.
+  - Bloodscrip total tracking was dropped along with the hook it needed
+    (the "He hands you N bloodscrip" line is unprompted, so reading it
+    without a persistent listener isn't worth reintroducing one for).
+
+  Usage: ;darloop
+  Stop:  ;kill darloop
+
+  Note: semicolon commands (;go2, ;u) only get dispatched by Lich when they
+  come from real client keystrokes (do_client in global_defs.rb). fput/put
+  send straight to the game socket and skip that dispatcher entirely, so
+  fput ';go2 ...' or fput ';u tdusk' just get echoed to the server as
+  literal text ("Please rephrase that command."). Use start_script/
+  running?/unpause_script instead - see below.
+=end
+
+module Darloop
+  TDUSK_NAME_PATTERN = /^tdusk/i
+
+  def self.tdusk_script
+    Script.running.find { |s| s.name =~ TDUSK_NAME_PATTERN } || Script.hidden.find { |s| s.name =~ TDUSK_NAME_PATTERN }
+  end
+
+  BIGSHOT_REFRESH_INTERVAL = 60
+
+  # Kills and restarts bigshot ("quick") - the Ruby equivalent of
+  # ;kill bigshot / ;bigshot quick (fput'ing those directly wouldn't work -
+  # see the semicolon-command note above).
+  def self.refresh_bigshot
+    Script.kill('bigshot') if Script.running?('bigshot')
+    pause 0.1 while Script.running?('bigshot')
+    start_script('bigshot', ['quick'])
+  end
+
+  # Blocks until tdusk is found paused. Polls a couple times a second -
+  # nothing runs per game line here. While tdusk is fighting (not paused),
+  # refreshes bigshot every BIGSHOT_REFRESH_INTERVAL seconds; on the 5th
+  # refresh of this combat phase, also fputs "pray". Stops the instant tdusk
+  # is found paused, so none of this runs during rest.
+  def self.wait_for_tdusk_pause
+    refresh_count = 0
+    last_refresh = Time.now
+    loop do
+      script = tdusk_script
+      return if script && script.paused?
+
+      if Time.now - last_refresh >= BIGSHOT_REFRESH_INTERVAL
+        refresh_bigshot
+        refresh_count += 1
+        fput 'pray' if refresh_count == 5
+        last_refresh = Time.now
+      end
+
+      pause 2
+    end
+  end
+
+  # start_script('go2', [...]) + wait_while { running?('go2') } only waits
+  # for the go2 process to exit - go2 can fail to find a path (e.g. the
+  # Duskruin wagon is only routable while it's actually docked at a stop)
+  # and still exit cleanly after reporting the error, leaving us wherever
+  # we started. Confirm arrival by room id and retry until it actually
+  # lands, rather than trusting that go2 exiting means it succeeded.
+  def self.travel_to(room_id, retry_delay: 20)
+    until Room.current.id == room_id
+      start_script('go2', [room_id])
+      wait_while { running?('go2') }
+      if Room.current.id != room_id
+        respond "[Darloop: go2 couldn't reach room #{room_id} yet (currently in #{Room.current.id}) - retrying in #{retry_delay}s]"
+        pause retry_delay
+      end
+    end
+  end
+end
+
+EXP_REGEX = /Field Exp:\s*([\d,]+)\/[\d,]+/i
+
+respond "[Darloop: started - waiting for tdusk to pause]"
+
+run_count = 0
+
+begin
+  loop do
+    Darloop.wait_for_tdusk_pause
+    pause 1
+
+    run_count += 1
+
+    # Travel to 26841 to rest - once per pause, not once per exp check.
+    Darloop.travel_to(26841)
+    pause 5
+
+    current_exp = nil
+    loop do
+      respond "[Darloop: run ##{run_count} | Darloop is running tdusk. ;kill darloop to stop]"
+
+      line = dothistimeout('exp', 15, EXP_REGEX)
+      current_exp = (line =~ EXP_REGEX) ? $1.delete(',').to_i : nil
+
+      break if current_exp && current_exp <= 600
+      pause 50
+    end
+
+    Darloop.travel_to(23780)
+    unpause_script('tdusk')
+  end
+rescue => e
+  respond "[Darloop: error - #{e.class}: #{e.message}]"
+  respond e.backtrace.first(5).join("\n") if e.backtrace
+end

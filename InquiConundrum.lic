@@ -32,11 +32,12 @@
   other Scripts: Loresang, VolnRestore2, Merchantical
   game: gs
   tags: conundrum, Zephyra wilds, inquisition, minigame
-  version: 1.27.0
+  version: 1.28.0
   required: Lich > 5.0; go2.lic (mapdb required - ;repository download-mapdb)
   \\Version\\
 			1.0.0 6/21/2026 - initial release
       1.1.0 6/25/2026 - Logic improvements, multiplayer added
+      1.28.0 08/07/2026 - Added mac compatibility
 =end
 
 module InquiConundrum
@@ -593,7 +594,11 @@ module InquiConundrum
   # never even sees it, and queue whatever follows for main_loop to act on.
   CMD_QUEUE = Queue.new
   UPSTREAM_HOOK_ID = 'inquiconundrum_upstream'
-  HOOK_CMD_RX = /^(?:<c>)?;(?:#{Regexp.escape(Script.current.name)}|inqui)(?:\s+(.*))?$/i
+  # $lich_char_regex (','|';') because Lich uses ',' as the script-trigger
+  # character on the Genie frontend (the mac-compatible client) instead of
+  # ';' - hardcoding ';' here left Genie/mac players unable to reach this
+  # hook at all.
+  HOOK_CMD_RX = /^(?:<c>)?#{$lich_char_regex}(?:#{Regexp.escape(Script.current.name)}|inqui)(?:\s+(.*))?$/i
 
   def self.parse_upstream(command)
     if (m = HOOK_CMD_RX.match(command))

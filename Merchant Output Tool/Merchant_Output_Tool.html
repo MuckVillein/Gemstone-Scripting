@@ -33632,6 +33632,18 @@ while (n === a[++i] && n === a[++i] && n === a[++i] && n === a[++i] && n === a[+
     }).join("\n");
   }
 
+  // Adjective -> CER range, per https://gswiki.play.net/Padding#Merchant_Services -
+  // this is the same table isharpie.lic's ADJECTIVE_TO_CER uses for recall-based
+  // (as opposed to assess-based) CER estimates.
+  var ADJECTIVE_TO_CER = {
+    "lightly": "1-2", "fairly": "3-4", "somewhat": "5-6", "decently": "7-8",
+    "heavily": "9-10", "very heavily": "11-13", "exceptionally": "14-15",
+    "masterfully": "16-20", "superbly": "21-25", "expertly": "26-30",
+    "phenomenally": "31-35", "fantastically": "36-40", "incredibly": "41-45",
+    "wondrously": "46-50"
+  };
+  function adjectiveToCER(adj){ return ADJECTIVE_TO_CER[(adj||"").toLowerCase()] || "?"; }
+
   // Pulls "combat effectiveness rating" data out of a bracketed assess line, e.g.:
   // [Some rotting full plate has a combat effectiveness rating of 3 points of Damage padding.
   //  It has 0 of 10 services towards the next full rank of combat effectiveness.  It also has
@@ -33685,6 +33697,14 @@ while (n === a[++i] && n === a[++i] && n === a[++i] && n === a[++i] && n === a[+
       return l && /[a-zA-Z0-9]/.test(l);
     });
 
+    // Recall reveals CER as a descriptive adjective rather than the exact
+    // number assess gives - "exactly how much requires assessment" means the
+    // game itself won't commit to a range, so that always wins as "?"
+    // regardless of which adjective is attached (matches isharpie.lic's
+    // extract_cer_tags precedent).
+    var needsAssessment = /exactly how much requires assessment/i.test(body);
+    var cerBits = [];
+
     var mode = null; // "enhancive" while inside an "It is an enhancive item:" block
 
     lines.forEach(function(line){
@@ -33732,11 +33752,49 @@ while (n === a[++i] && n === a[++i] && n === a[++i] && n === a[++i] && n === a[+
         if(/permanently unlocked loresong by [a-zA-Z']+/i.test(c)){ return; }
         if(/bound to [a-zA-Z']+ via the spell [a-zA-Z ]+/i.test(c)){ return; }
 
+        // Recall-text CER: Damage/Critical padding (armor), Critical weighting
+        // (weapon), Sighted (ranged accuracy). Armor's "padded against
+        // critical" wins over a weapon's "weighted to inflict" if somehow
+        // both matched for one item, mirroring isharpie's precedence.
+        // The "\bis\s+" anchor is required: without it, a one-word adjective
+        // (e.g. "fairly") lets the match start at the sentence's "is" instead
+        // of "It", sweeping "is" into the capture ("is fairly") and always
+        // missing the adjectiveToCER lookup (confirmed via isharpie.lic,
+        // which had this exact bug). Two-word adjectives ("very heavily")
+        // aren't affected since their own true start position already
+        // produces a full match.
+        if((m = /\bis\s+(\w+(?:\s+\w+)?)\s+padded\s+to\s+lessen\s+the\s+damage/i.exec(c))){
+          cerBits.push("Damage " + (needsAssessment ? "?" : adjectiveToCER(m[1])));
+          return;
+        }
+        if((m = /\bis\s+(\w+(?:\s+\w+)?)\s+padded\s+against\s+critical/i.exec(c))){
+          cerBits.push("Critical " + (needsAssessment ? "?" : adjectiveToCER(m[1])));
+          return;
+        }
+        if(!cerBits.some(function(b){ return b.indexOf("Critical ") === 0; }) &&
+           (m = /\bis\s+(\w+(?:\s+\w+)?)\s+weighted\s+to\s+inflict/i.exec(c))){
+          cerBits.push("Critical " + (needsAssessment ? "?" : adjectiveToCER(m[1])));
+          return;
+        }
+        if((m = /\bis\s+(\w+(?:\s+\w+)?)\s+sighted\b/i.exec(c))){
+          cerBits.push("Sighted " + (needsAssessment ? "?" : adjectiveToCER(m[1])));
+          return;
+        }
+        if(/sighted\s+to\s+assist/i.test(c)){
+          if(needsAssessment) cerBits.push("Sighted ?");
+          return;
+        }
+
         // fallback: anything else starting with "It " becomes a flourish entry
         var flourish = c.replace(/^It\s+/i, "").replace(/\.$/, "").trim();
         if(flourish && /[a-zA-Z0-9]/.test(flourish)) result.flourishes.push(flourish);
       });
     });
+
+    if(cerBits.length){
+      var recallCerText = "Recall: " + cerBits.join(", ");
+      result.cer = result.cer ? (result.cer + " " + recallCerText) : recallCerText;
+    }
 
     return result;
   }
