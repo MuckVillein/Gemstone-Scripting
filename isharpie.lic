@@ -24,7 +24,7 @@ The following inputs are available:
       Other scripts: Combatical, Merchantical, Loresang, VolnRestore2
       game: gs
       tags: items, inventory, notes, highlight, Sharpie
-      version: 1.3.7
+      version: 1.3.8
       required: Lich > 5.0
 
       \\Version\\
@@ -243,9 +243,12 @@ module ISharpie
     # GameObj.right_hand.name at tag-time may be shorter than what the stream
     # shows. If no exact match, accept any stored name that is a trailing
     # suffix of the stream name.
+    # Stored names that are a single bare noun ("sack") are excluded: they would
+    # match every other item sharing that noun ("small burlap sack").
     if matches.empty?
       matches = notes.select { |n|
-        n[:long_name].length < long_name.length && long_name.end_with?(n[:long_name])
+        n[:long_name].split.length >= 2 &&
+          n[:long_name].length < long_name.length && long_name.end_with?(n[:long_name])
       }
     end
 
@@ -968,10 +971,37 @@ module ISharpie
     name.to_s.strip.downcase
   end
 
+  # Hand slots frequently report only the bare noun ("sack") rather than the
+  # full display name ("large sack"). Storing the bare noun makes the name
+  # fallbacks match every other item with that noun, so look up the full name
+  # from a glance, which renders hands with their complete tagged names.
+  def self.full_name_for(item)
+    base = long_name_for(item)
+    return base if base.split.length >= 2
+
+    captured = []
+    DownstreamHook.add(RECALL_CAPTURE_HOOK_ID, proc { |line| captured << line; line })
+    begin
+      fput 'glance'
+      pause 0.5
+    ensure
+      DownstreamHook.remove(RECALL_CAPTURE_HOOK_ID)
+    end
+    captured.join("\n").scan(ITEM_TAG_RX) do |exist_id, _noun, tag_text, trailing|
+      next unless exist_id == item.id.to_s
+
+      full = "#{tag_text}#{sanitize_trailing(trailing)}".strip
+      return full unless full.empty?
+    end
+    base
+  rescue StandardError
+    base
+  end
+
   def self.tag_item(item, note_text, color_name, silent_note = nil)
     return unless item
 
-    long_name = long_name_for(item)
+    long_name = full_name_for(item)
     existing  = bound_note_for(item.id)
     color     = color_name ? normalize_color(color_name) : (existing && existing[:color]) || 'none'
 
