@@ -30,7 +30,7 @@ The following inputs are available:
       Other scripts: Combatical, Merchantical, Loresang, VolnRestore2
       game: gs
       tags: items, inventory, notes, highlight, Sharpie
-      version: 1.4.0
+      version: 1.4.1
       required: Lich > 5.0
 
       \\Version\\
@@ -49,18 +49,17 @@ The following inputs are available:
       1.3.6 08/08/2026 - sorcery now read from sanctify count instead of a dead "sorcery" keyword match; enchant/sorcery/ensorcel always render as one +XX/SX/EX group
       1.3.7 08/08/2026 - fixed CER adjective capture swallowing "is" for one-word adjectives, always falling back to "?"
       1.3.8 10/11/2026 - bare-noun notes no longer match every item with that noun; tags now survive locker manifests
-      1.4.0 10/11/2026 - identical-item hardening: (Multiple Identical) marker, verify prompt on pickup,
-                         silent fingerprints taken only when identical items are detected (look, recall, analyze,
-                         examine, look in); identical copies that match share one note,
-                         re-identify tagged items at startup, rack put/remove tracking, one id per note,
-                         tag options in any order (color, perm), ;isharpie why
-                         stale-note culling: notes unseen for 7 days played go stale, then go missing when their last
-                         container is browsed and they are not found; startup warning guides the review
+      1.4.0 10/11/2026 - identical-item hardening: (Multiple Identical) marker, verify prompt on pickup, one id per note
+                         silent fingerprints (look, recall, analyze, examine, look in) only when identical items exist
+                         identical copies that match share one note; tagged items re-identified at startup; racks tracked
+      1.4.1 10/11/2026 - stale-note culling: unseen 7 days played, then missing once their last container is browsed
+                         tag options in any order (color, perm); sentinel-based command capture filters chat/stream noise
+                         fixed a stray "false" in the tag confirmation message
 
 =end
 
 module ISharpie
-  VERSION = '1.4.0'.freeze
+  VERSION = '1.4.1'.freeze
 
   VALID_COLORS = %w[orange teal green yellow none].freeze
   DEFAULT_RECALL_MODE = 'loud'.freeze
@@ -1840,9 +1839,9 @@ module ISharpie
       return
     end
 
-    label = [note_text && "\"#{note_text.strip}\"",
-             silent_note && "SN: \"#{silent_note.strip}\"",
-             perm && '[perm]'].compact.join(' ')
+    label = [("\"#{note_text.strip}\"" if note_text),
+             ("SN: \"#{silent_note.strip}\"" if silent_note),
+             ('[perm]' if perm)].compact.join(' ')
 
     if existing
       changes = { color: color }
