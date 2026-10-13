@@ -30,7 +30,7 @@ The following inputs are available:
       Other scripts: Combatical, Merchantical, Loresang, VolnRestore2
       game: gs
       tags: items, inventory, notes, highlight, Sharpie
-      version: 1.4.1
+      version: 1.4.2
       required: Lich > 5.0
 
       \\Version\\
@@ -55,11 +55,12 @@ The following inputs are available:
       1.4.1 10/11/2026 - stale-note culling: unseen 7 days played, then missing once their last container is browsed
                          tag options in any order (color, perm); sentinel-based command capture filters chat/stream noise
                          fixed a stray "false" in the tag confirmation message
+      1.4.2 10/13/2026 - annotator hook now runs after all other downstream hooks so it can't starve them of replies
 
 =end
 
 module ISharpie
-  VERSION = '1.4.1'.freeze
+  VERSION = '1.4.2'.freeze
 
   VALID_COLORS = %w[orange teal green yellow none].freeze
   DEFAULT_RECALL_MODE = 'loud'.freeze
@@ -165,6 +166,7 @@ module ISharpie
   INVDB_PATH        = File.join(LICH_DIR, 'data', 'inv.db3').freeze
 
   ANNOTATOR_HOOK_ID          = 'isharpie_annotator'.freeze
+  ANNOTATOR_PRIORITY         = -1000 # runs after every other downstream hook
   CONTAINER_TRACKER_HOOK_ID  = 'isharpie_container_tracker'.freeze
   UPSTREAM_HOOK_ID           = 'isharpie_upstream'.freeze
   RECALL_CAPTURE_HOOK_ID     = 'isharpie_recall_capture'.freeze
@@ -184,6 +186,7 @@ module ISharpie
   @last_ambiguous_list  = nil
   @note_counter         = nil
   @startup_suppress     = false
+  @startup_suppress_since = nil
   @inventory_only       = false
   @recall_mode          = nil
   @manifest_buffer      = nil
@@ -560,7 +563,20 @@ module ISharpie
   # @startup_suppress so nothing shows to the player; Lich's XML parser still
   # runs underneath and fills in item.contents for each container.
   # Non-containers get a "can't look in that" response which is also suppressed.
+  # Startup suppression expires on its own: a stuck preload must never be able
+  # to blank the whole game stream.
+  STARTUP_SUPPRESS_MAX_SECONDS = 30
+
+  def self.startup_suppressed?
+    return false unless @startup_suppress
+    return true if Time.now.to_f - @startup_suppress_since.to_f <= STARTUP_SUPPRESS_MAX_SECONDS
+
+    @startup_suppress = false
+    false
+  end
+
   def self.preload_containers
+    @startup_suppress_since = Time.now.to_f
     @startup_suppress = true
     silence_me  # toggles script.silent = true, suppresses [script]>command echo
     begin
@@ -743,8 +759,21 @@ module ISharpie
   ## ---- annotator downstream hook --------------------------------------------
   # Runs on the socket-reading thread - must never block on game I/O.
 
+  # Lich runs downstream hooks in order, and a hook that returns nil hides the
+  # line from every hook after it. The annotator returns nil for the whole
+  # startup preload and holds back and re-emits locker manifests, so it must
+  # run AFTER every other script's hooks: otherwise a script waiting on a reply
+  # that lands in that window (lumnismon's "lumnis info" scoop) never sees it
+  # and its hook stays registered, swallowing prompts and blank lines forever.
+  # Lich 5.19+ lets a hook declare persist:, 5.22+ also priority: (higher runs
+  # first); older Lich takes a plain add and keeps registration order.
   def self.install_annotator
-    DownstreamHook.add(ANNOTATOR_HOOK_ID, proc { |line| annotate_line(line) })
+    action = proc { |line| annotate_line(line) }
+    params = DownstreamHook.method(:add).parameters.map { |_type, name| name }
+    options = {}
+    options[:persist]  = false if params.include?(:persist)
+    options[:priority] = ANNOTATOR_PRIORITY if params.include?(:priority)
+    DownstreamHook.add(ANNOTATOR_HOOK_ID, action, **options)
   end
 
   def self.remove_annotator
@@ -758,7 +787,7 @@ module ISharpie
   # are not in GameObj.inv. Flushed early on timeout or size cap so a missed
   # end marker can never swallow output for long.
   def self.annotate_line(line)
-    return nil if @startup_suppress
+    return nil if startup_suppressed?
 
     if @manifest_buffer
       @manifest_buffer << line
