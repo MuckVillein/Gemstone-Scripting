@@ -1436,6 +1436,31 @@ module Merchantical
       month_prefix = now.strftime('%Y-%m')
       year_prefix  = now.strftime('%Y')
 
+      if (undo = @shop_state['last_scan_undo'])
+        undo_ids = undo['ledger_event_ids'] || []
+        undo_lbl = Gtk::Label.new
+        undo_lbl.markup = "<span foreground='#cc5555'>Undo Last Scan</span>"
+        undo_btn = Gtk::Button.new
+        undo_btn.add(undo_lbl)
+        undo_btn.halign = :start
+        undo_btn.set_tooltip_text(
+          "Revert the scan from #{undo['time']}: restores Shop Inventory to what it was\n" \
+          "before that scan and deletes the #{undo_ids.length} ledger entr#{undo_ids.length == 1 ? 'y' : 'ies'} it recorded.\n" \
+          "Any listing/removal done since that scan is rolled back too -- rescan after."
+        )
+        undo_btn.signal_connect('clicked') do
+          @shop_state['shop_inventory'] = undo['shop_inventory'] || {}
+          @shop_state['shop_paths']     = undo['shop_paths'] || {}
+          (@shop_state['ledger_events'] || []).reject! { |ev| undo_ids.include?(ev['id']) }
+          @shop_state.delete('last_scan_undo')
+          persist_shop_state
+          Lich::Messaging.msg("yellow",
+            "[Merchantical] Undid scan from #{undo['time']} (#{undo_ids.length} ledger entr#{undo_ids.length == 1 ? 'y' : 'ies'} removed).")
+          apply_shop_state(@shop_state)
+        end
+        @ledger_box.pack_start(undo_btn, expand: false, fill: false, padding: 4)
+      end
+
       stats_row = Gtk::Box.new(:horizontal, 20)
       stats_row.halign = :start
       [
@@ -4814,7 +4839,9 @@ module Merchantical
           this week/month/year totals, a 6-month income-vs-upkeep table (upkeep is
           the game's real 10,000-silver-per-room monthly shop fee), and the raw
           recent-sales list -- click the X on an entry to delete it (e.g. one you
-          actually pulled back out by hand instead of selling).
+          actually pulled back out by hand instead of selling). Undo Last Scan (top
+          of the tab) reverts the most recent scan entirely: inventory goes back to
+          how it was before it, and every sale that scan recorded is deleted.
 
         Export Shop HTML (main toolbar, next to the #{SHOP_ICON} toggle) is separate
         from this notebook -- it saves every item you've flagged with #{SHOP_ICON} in
@@ -7570,11 +7597,28 @@ module Merchantical
     # scan your own containers (worn or held) for items to sell, and list them there.
     # ---------------------------------------------------------------------------
 
-    # Travel to a room by go2-compatible id/name and wait for arrival.
+    # Travel to a room by go2-compatible id/name and wait for arrival. Returns
+    # whether we actually ended up there (go2 can stop short -- e.g. a failed
+    # bank detour for travel silvers -- without the caller ever knowing).
     def go2_to(room)
       start_script("go2", [room.to_s])
       while running?("go2"); pause 0.5; end
       waitrt?
+      at_room?(room)
+    end
+
+    # Best-effort "are we standing in `room`?" -- handles plain map ids and
+    # uNNNNNN game ids; anything else (go2 tags like "bank") can't be checked
+    # cheaply, so it's assumed fine.
+    def at_room?(room)
+      target = room.to_s.strip
+      if target =~ /\Au(\d+)\z/i
+        XMLData.room_id.to_s == $1
+      elsif target =~ /\A\d+\z/
+        (Map.current_room_id rescue nil).to_s == target
+      else
+        true
+      end
     end
 
     OPPOSITE_DIRECTION = {
@@ -7596,12 +7640,22 @@ module Merchantical
     # like a failure (wrong noun, not close enough, etc.) -- callers should abort
     # rather than run "shop inventory" from outside the shop.
     def enter_player_shop(location, shop_name)
-      go2_to(location)
+      unless go2_to(location)
+        Lich::Messaging.msg("yellow",
+          "[Merchantical] Travel to #{location} failed (go2 stopped short) -- not entering the shop.")
+        return false
+      end
       pause 0.3
+      before_room = XMLData.room_id.to_s
       go_resp = fput "go #{shop_name}"
       waitrt?; pause 0.3
-      !(go_resp.to_s =~ /don.t see|can.t go|nothing happens|what were you referring|you can.t/i)
+      return false if go_resp.to_s =~ /don.t see|can.t go|nothing happens|what were you referring|you can.t|where are you trying to go/i
+      # Didn't actually move anywhere -- whatever the response said, we're not inside.
+      XMLData.room_id.to_s != before_room
     end
+
+    # The game's own refusal when `shop inventory` is run outside your shop.
+    NOT_IN_SHOP_RE = /must be in your shop/i
 
     def leave_player_shop
       fput "out"
@@ -7636,7 +7690,15 @@ module Merchantical
         title_line  = look_lines.find { |l| l =~ /\A\[(.+)\]\s*\z/ }
         titles[room_id] = title_line ? title_line[/\A\[(.+)\]\s*\z/, 1] : room_id
 
-        results[room_id] = parse_shop_inventory(capture_command("shop inventory"))
+        inv_lines = capture_command("shop inventory")
+        # Not one of our shop rooms -- record nothing for it and don't explore
+        # onward from it (we've wandered outside, or never got in at all).
+        if inv_lines.join(' ') =~ NOT_IN_SHOP_RE
+          paths.delete(room_id)
+          titles.delete(room_id)
+          return
+        end
+        results[room_id] = parse_shop_inventory(inv_lines)
         signs[room_id]   = parse_sign_text(capture_command("read sign"))
         return if visited_ids.length >= max_rooms
 
@@ -7883,6 +7945,14 @@ module Merchantical
 
       room_results, paths, signs, titles = crawl_shop_rooms(max_rooms: 3)
 
+      # Every room refused `shop inventory` -- we never made it into the shop.
+      # Bail before touching saved state, or every listed item reads as sold.
+      if room_results.empty?
+        Lich::Messaging.msg("yellow",
+          "[Merchantical] Shop scan: not inside your shop -- nothing saved, ledger untouched.")
+        return
+      end
+
       # Snapshot what we believed was in the shop BEFORE overwriting it below,
       # so we can tell what quietly vanished since the last scan -- our own
       # actions (List Items For Sale, Commit removal) already keep this cache
@@ -7890,6 +7960,7 @@ module Merchantical
       # do ourselves was bought by someone else. Skipped on the very first
       # scan ever (nothing to compare against yet).
       old_inventory = shop_state['shop_inventory'] || {}
+      old_paths     = shop_state['shop_paths'] || {}
 
       shop_state['shop_inventory'] = {}
       room_results.each do |room_id, containers|
@@ -7907,8 +7978,17 @@ module Merchantical
         Lich::Messaging.msg("yellow",
           "[Merchantical] Shop scan: #{room_id} -- #{item_count} item(s) across #{containers.length} container(s).")
       end
+      # A previously-known room this crawl didn't reach isn't proof it emptied
+      # out -- carry its last listing (and path) forward untouched.
+      (old_inventory.keys - room_results.keys).each do |room_id|
+        shop_state['shop_inventory'][room_id] = old_inventory[room_id]
+        paths[room_id] ||= old_paths[room_id] if old_paths[room_id]
+        Lich::Messaging.msg("yellow",
+          "[Merchantical] Shop scan: #{room_id} not reached this scan -- kept its previous listing.")
+      end
       shop_state['shop_paths'] = paths
 
+      events = []
       if old_inventory.any?
         events = detect_shop_sales(old_inventory, shop_state['shop_inventory'])
         if events.any?
@@ -7920,6 +8000,15 @@ module Merchantical
             "[Merchantical] Ledger: #{sold_qty} item(s) sold since last scan for #{formatted} silvers.")
         end
       end
+
+      # One-level undo for the Ledger tab's Undo Last Scan: what the inventory
+      # and paths looked like before this scan, plus the ledger entries it added.
+      shop_state['last_scan_undo'] = {
+        'time'             => Time.now.strftime('%Y-%m-%d %H:%M'),
+        'shop_inventory'   => old_inventory,
+        'shop_paths'       => old_paths,
+        'ledger_event_ids' => events.map { |e| e['id'] }
+      }
 
       # Deliberately NOT leaving the shop or navigating home here -- stay put in
       # whichever room the crawl finished in, since the player will likely want
@@ -7943,6 +8032,8 @@ module Merchantical
       events = []
       today = Time.now.strftime('%Y-%m-%d')
       old_inv.each do |room_id, room_data|
+        # Never scanned this time -- can't say anything about what's there.
+        next unless new_inv.key?(room_id)
         new_containers = (new_inv.dig(room_id, 'containers') || [])
         (room_data['containers'] || []).each do |old_cont|
           new_cont  = new_containers.find { |c| c['name'] == old_cont['name'] }
