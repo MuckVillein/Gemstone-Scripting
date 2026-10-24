@@ -11,7 +11,7 @@ The following inputs are available:
         Other scripts: Combatical, VolnRestore2, Loresang, isharpie
         game: gs
         tags: utility, economy, merchant, loresang, sell, pawnshop, shop, item, management, playershop, shop, sales
-        version: 1.6.0
+        version: 1.7.0
         required: Lich > 5.0
 
         \Version\
@@ -78,6 +78,7 @@ The following inputs are available:
         1.6.0 09/18/2026 - Edit Items For Sale: per-item editable price, ctrl/shift-click
                           multi-select with bulk +/-% and remove buttons. Added ? help
                           popups for Loresang and Shop Inventory Management.
+        1.7.0 10/23/2026 - Scan Shop aborts if travel/entry fails instead of logging false sales; added Undo Last Scan to the Ledger.
 
 
 =end
