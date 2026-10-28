@@ -28,12 +28,12 @@
   plain movement (traps, etc.) is never paused for - it's just retried
   quietly until it succeeds.
 
- author: Kyrandos
-  other Scripts: Loresang, VolnRestore2, Merchantical
+  author: Kyrandos
+  Other scripts: Combatical, VolnRestore2, Loresang, Merchantical, isharpie, scriv
   game: gs
   tags: conundrum, Zephyra wilds, inquisition, minigame
   version: 1.28.0
-  required: Lich > 5.0; go2.lic (mapdb required - ;repository download-mapdb)
+  required: Lich > 5.0
   \\Version\\
 			1.0.0 6/21/2026 - initial release
       1.1.0 6/25/2026 - Logic improvements, multiplayer added

@@ -9,12 +9,12 @@ The following inputs are available:
 	;loresang hand          - sing item in right hand until complete
 	;loresang               - sing all items from Sing Container to Sung Container
 	
-			author: Kyrandos
-      Other scripts: Combatical, VolnRestore2, Merchantical
-			game: gs
-			tags: utility, economy, bard, loresong, loresing, html, csv, output, export
-			version: 1.2.6
-		  required: Lich > 5.0
+      author: Kyrandos
+      Other scripts: Combatical, VolnRestore2, Merchantical, isharpie, scriv
+      game: gs
+      tags: utility, economy, bard, loresong, loresing, html, csv, output, export
+      version: 1.2.6
+      required: Lich > 5.0
 
 			\\Version\\
 			1.0.0 1/22/2026 - initial release
@@ -40,7 +40,6 @@ The following inputs are available:
 =end
 
 require 'gtk3' rescue nil
-require 'json'
 
 module Loresang
   class Runner

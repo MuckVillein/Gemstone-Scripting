@@ -33,6 +33,13 @@
   fput ';go2 ...' or fput ';u tdusk' just get echoed to the server as
   literal text ("Please rephrase that command."). Use start_script/
   running?/unpause_script instead - see below.
+
+  author: Kyrandos
+  Other scripts: Combatical, VolnRestore2, Loresang, Merchantical, isharpie, scriv
+  game: gs
+  tags:
+  version:
+  required: Lich > 5.0
 =end
 
 module Darloop

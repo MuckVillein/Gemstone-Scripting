@@ -11,10 +11,10 @@
    ;volnrestore2 set pause_between 0.8   - How many seconds between each cast
 
  author: Kyrandos
- version: 1.4.2
+ Other scripts: Combatical, Loresang, Merchantical, isharpie, scriv
  game: gs
- other Scripts: Loresang, Combatical
  tags: voln, symbol, restoration, heal
+ version: 1.4.2
  required: Lich > 5.0
 
             \\Version\\

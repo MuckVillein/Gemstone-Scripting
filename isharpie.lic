@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'json'
-require 'fileutils'
-require 'set'
 require 'digest'
 
 =begin
@@ -27,7 +24,7 @@ The following inputs are available:
   ;isharpie help                         - command list
 
       author: Kyrandos
-      Other scripts: Combatical, Merchantical, Loresang, VolnRestore2
+      Other scripts: Combatical, VolnRestore2, Loresang, Merchantical, scriv
       game: gs
       tags: items, inventory, notes, highlight, Sharpie
       version: 1.4.2

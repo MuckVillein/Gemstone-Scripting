@@ -22,12 +22,18 @@
   Nothing is sent off your machine — the socket only listens on
   127.0.0.1 (localhost).
   --------------------------------------------------------------
+
+  author: Kyrandos
+  Other scripts: Combatical, VolnRestore2, Loresang, Merchantical, isharpie, scriv
+  game: gs
+  tags:
+  version:
+  required: Lich > 5.0
 =end
 
 require 'socket'
 require 'digest/sha1'
 require 'base64'
-require 'json'
 
 PORT = 8777
 HOST = '127.0.0.1'
