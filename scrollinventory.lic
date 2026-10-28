@@ -1,0 +1,670 @@
+# frozen_string_literal: true
+
+require 'json'
+require 'fileutils'
+require 'set'
+
+=begin
+
+scrollinventory.lic (Scroll Inventory, alias ;scriv) keeps a running ledger of every scroll you own
+and the spells written on them, so you can see at a glance what you can invoke and how much of it.
+It reads your scrolls once, remembers them, and quietly tracks every INVOKE you make (by hand or from
+another script) so each spell gets a cumulative use count. It never casts or invokes anything itself.
+
+Scrolls are not tracked by a single item id. A scroll's id changes every time it passes through a
+locker, and you will often own several scrolls with the same name but different spells. So each scroll
+is remembered by its name plus the exact set of spells read from it, and is re-matched to its history
+whenever it turns up again under a new id.
+
+The following inputs are available:
+  ;scriv                       - refresh (read any new scrolls) and print the spell summary
+  ;scriv list                  - print the last summary without touching the game
+  ;scriv detail                - every tracked scroll with its spells, location and use counts
+  ;scriv spell <num|name>      - one spell: which scrolls hold it and how often it was used
+  ;scriv scan                  - re-read every scroll you are carrying, not just new ones
+  ;scriv forget <#>            - drop one scroll from the ledger (the # shown by detail)
+  ;scriv prune                 - drop every scroll marked stored (lockers etc.) from the ledger
+  ;scriv help                  - command list
+  ;scrollinventory works exactly the same as ;scriv.
+
+      author: Kyrandos
+      Other scripts: Combatical, Merchantical, Loresang, VolnRestore2, isharpie
+      game: gs
+      tags: scrolls, invoke, spells, inventory, tracking, arcane symbols
+      version: 1.0.0
+      required: Lich > 5.0
+
+      \\Version\\
+      1.0.0 10/28/2026 - initial release: scroll ledger keyed by name + spell set, invoke/use tracking,
+                         spell summary with scroll names and cumulative counts, ;scriv alias
+
+=end
+
+module ScrollInventory
+  VERSION = '1.0.0'.freeze
+
+  SCROLL_NOUNS = %w[scroll vellum paper papyrus parchment palimpsest].freeze
+  ALIASES      = %w[scrollinventory scriv].freeze
+
+  EDUBARBARIAN_DIR = File.join(LICH_DIR, 'EduBarbarian').freeze
+
+  CAPTURE_HOOK_ID  = 'scriv_capture'.freeze
+  OBSERVER_HOOK_ID = 'scriv_observer'.freeze
+  UPSTREAM_HOOK_ID = 'scriv_upstream'.freeze
+
+  # $lich_char_regex (','|';') because Lich uses ',' as the script-trigger
+  # character on the Genie frontend (the mac-compatible client).
+  HOOK_CMD_RX = /^(?:<c>)?#{$lich_char_regex}(?:#{ALIASES.map { |a| Regexp.escape(a) }.join('|')})(?:\s+(.*))?$/i
+
+  # One entry of a server-side container listing:
+  #   <inv id='CONTAINER'> a <a exist="ID" noun="NOUN">TAG_TEXT</a></inv>
+  INV_LIST_RX = /<inv id='([^']+)'>\s*(?:an?|some|the)?\s*<a exist="(\d+)" noun="([^"]*)">([^<]*)<\/a>/.freeze
+
+  # Isolating a command's response (same approach as isharpie/merchantical):
+  # right after the command a sentinel that can never succeed is sent; the game
+  # answers in order, so seeing its failure line proves the real response ended.
+  SENTINEL_CMD      = 'look at #0'.freeze
+  SENTINEL_RX       = /could not find what you were referring to/i.freeze
+  LNET_LINE_RX      = /\A\[[A-Za-z][\w' -]*\]\s+[A-Za-z][\w' -]*:\s*"/.freeze
+  BROADCAST_LINE_RX = /\A\*\s*[A-Za-z].*[.!]\s*\z/.freeze
+
+  # Invoke messaging (gswiki Scroll / Arcane Symbols).
+  INVOKE_OK_RX  = /You raise (?:the |your |an? )?(.+?) and gesture to invoke the (.+?) spell\./.freeze
+  VIBRANT_OK_RX = /the ink leaps from the page and seeps into your skin/i.freeze
+  BLANK_RX      = /leaving a blank space where the (.+?) spell had previously been written/i.freeze
+  INVOKE_CMD_RX = /\Ainvoke\s+(\d{2,4})\b/i.freeze
+  PENDING_TTL   = 15 # seconds an upstream "invoke <num>" stays attributable
+
+  CMD_QUEUE   = Queue.new
+  EVENT_QUEUE = Queue.new
+
+  @data            = nil
+  @dirty           = false
+  @non_containers  = Set.new
+  @pending_invoke  = nil
+  @warned_closed   = Set.new
+
+  ## ---- persisted ledger --------------------------------------------------
+
+  def self.data_path
+    char = XMLData.name.to_s.downcase.gsub(/[^a-z0-9]+/, '_').gsub(/\A_+|_+\z/, '')
+    File.join(EDUBARBARIAN_DIR, "scrollinventory_#{char}.json")
+  end
+
+  def self.data
+    @data ||= load_data
+  end
+
+  def self.load_data
+    blank = { next_uid: 1, records: [], usage: {} }
+    return blank unless File.exist?(data_path)
+
+    loaded = JSON.parse(File.read(data_path), symbolize_names: true)
+    blank.merge(loaded)
+  rescue StandardError => e
+    say "could not read #{data_path} (#{e.class}) - starting a fresh ledger"
+    blank
+  end
+
+  def self.save_data!
+    FileUtils.mkdir_p(EDUBARBARIAN_DIR)
+    File.write(data_path, JSON.pretty_generate(data))
+  rescue StandardError => e
+    say "could not save to #{data_path}: #{e.class}"
+  end
+
+  def self.records
+    data[:records]
+  end
+
+  def self.usage
+    data[:usage]
+  end
+
+  def self.key(num)
+    num.to_s.to_sym
+  end
+
+  ## ---- helpers -------------------------------------------------------------
+
+  def self.say(message)
+    _respond Lich::Messaging.msg_format('whisper', "[ScrollInventory: #{message}]", encode: false)
+  end
+
+  def self.strip_tags(line)
+    line.to_s.gsub(/<[^>]*>/, '').gsub('&gt;', '>').gsub('&lt;', '<').gsub('&amp;', '&').strip
+  end
+
+  def self.scroll_obj?(obj)
+    obj && SCROLL_NOUNS.include?(obj.noun.to_s)
+  end
+
+  def self.spell_nums(spells)
+    spells.map { |s| s[:num] }.sort
+  end
+
+  def self.find_spell(rec, num, name)
+    rec[:spells].find do |s|
+      (num && s[:num] == num.to_i) || (name && s[:name].to_s.casecmp?(name.to_s))
+    end
+  end
+
+  def self.lookup_num(name)
+    hit = usage.find { |_k, v| v[:name].to_s.casecmp?(name.to_s) }
+    return hit[0].to_s.to_i if hit && hit[0].to_s =~ /\A\d+\z/
+
+    records.each { |r| r[:spells].each { |s| return s[:num] if s[:name].to_s.casecmp?(name.to_s) } }
+    nil
+  end
+
+  ## ---- command capture -------------------------------------------------------
+
+  # Raw response lines for one command, never shown to the player.
+  def self.capture(cmd)
+    captured = []
+    done = false
+    first_miss = false
+    in_push = false
+    DownstreamHook.add(CAPTURE_HOOK_ID, proc { |line|
+      next line if done
+
+      was_in_push = in_push
+      in_push = true  if line =~ /<pushStream/
+      in_push = false if line =~ /<popStream/
+      stripped = strip_tags(line)
+      if was_in_push || line =~ /<pushStream/ || line =~ /<prompt[\s>]/ || stripped.empty? ||
+         stripped =~ LNET_LINE_RX || stripped =~ BROADCAST_LINE_RX
+        next line
+      end
+
+      if stripped =~ SENTINEL_RX
+        if captured.empty? && !first_miss
+          # The command's own failure, not the sentinel's.
+          first_miss = true
+          captured << line
+          next nil
+        end
+        done = true
+        next nil
+      end
+
+      captured << line
+      nil
+    })
+    previous_silent = Script.current.silent
+    begin
+      Script.current.silent = true
+      fput cmd
+      fput SENTINEL_CMD
+      started = Time.now
+      pause 0.05 until done || Time.now - started > 4
+      waitrt?
+      pause 0.05
+    ensure
+      Script.current.silent = previous_silent
+      DownstreamHook.remove(CAPTURE_HOOK_ID)
+    end
+    captured
+  end
+
+  ## ---- finding and reading scrolls -----------------------------------------
+
+  # Scrolls in your hands and in the top level of every container you wear.
+  # Returns [scrolls, complete]; complete is false when any container could
+  # not be inspected, so a scroll that merely wasn't seen is never declared stored.
+  def self.gather_scrolls
+    found = []
+    complete = true
+
+    [GameObj.right_hand, GameObj.left_hand].each do |obj|
+      found << { id: obj.id.to_s, name: obj.name.to_s, where: 'hand' } if scroll_obj?(obj)
+    end
+
+    GameObj.inv.to_a.each do |item|
+      next if @non_containers.include?(item.id.to_s)
+
+      raw = capture("look in ##{item.id}").join("\n")
+      entries = raw.scan(INV_LIST_RX).select { |cid, *| cid == item.id.to_s }
+      if entries.empty?
+        if raw =~ /nothing in|is empty|There is nothing/i
+          next
+        elsif raw =~ /\bclosed\b|need to open/i
+          complete = false
+          say "your #{item.noun} is closed - open it so its scrolls can be seen" if @warned_closed.add?(item.id.to_s)
+        elsif raw.strip.empty?
+          complete = false
+        else
+          @non_containers << item.id.to_s # armor, weapons, etc. - nothing to look in
+        end
+        next
+      end
+
+      entries.each do |_cid, eid, noun, text|
+        next unless SCROLL_NOUNS.include?(noun)
+
+        found << { id: eid, name: text.strip, where: item.name.to_s }
+      end
+    end
+
+    [found, complete]
+  end
+
+  # [] when the scroll showed no spells (blank or unreadable), nil when the
+  # game never answered.
+  def self.read_scroll(id)
+    lines = capture("read ##{id}").map { |l| strip_tags(l) }.reject(&:empty?)
+    return nil if lines.empty?
+
+    parse_spells(lines)
+  end
+
+  # Read output lists spells as "(101) Spirit Warding I"; spells written in
+  # vibrant ink carry an "in vibrant ink" tail.
+  def self.parse_spells(lines)
+    spells = lines.filter_map do |text|
+      if (m = text.match(/\((\d{2,4})\)\s+(\S.*)\z/))
+        num = m[1]
+        name = m[2]
+      elsif (m = text.match(/\A(\S.*?)\s+\((\d{2,4})\)\z/))
+        name = m[1]
+        num = m[2]
+      else
+        next
+      end
+      vibrant = name.match?(/vibrant ink/i)
+      name = name.sub(/\s*,?\s*(?:written\s+)?in vibrant ink\.?\z/i, '').sub(/[.,]\z/, '').strip
+      { num: num.to_i, name: name, vibrant: vibrant }
+    end
+    spells.uniq { |s| s[:num] }
+  end
+
+  ## ---- the refresh pass ------------------------------------------------------
+
+  def self.refresh(deep: false)
+    found, complete = gather_scrolls
+    now = Time.now.to_i
+    claimed = Set.new
+    to_read = []
+
+    found.each do |scroll|
+      rec = records.find { |r| r[:id] == scroll[:id] && r[:name].to_s.casecmp?(scroll[:name]) }
+      if rec
+        claimed << rec[:uid]
+        rec[:status] = 'carried'
+        rec[:container] = scroll[:where]
+        rec[:last_seen] = now
+        to_read << [scroll, rec] if deep || rec[:stale]
+      else
+        to_read << [scroll, nil]
+      end
+    end
+
+    # Anything we thought was carried and can no longer be seen has gone into a
+    # locker (or elsewhere). Its id is meaningless now; it keeps its history.
+    if complete
+      records.each do |r|
+        next unless r[:status] == 'carried' && !claimed.include?(r[:uid])
+
+        r[:status] = 'stored'
+        r[:id] = nil
+        r[:container] = 'stored'
+      end
+    end
+
+    total = to_read.size
+    say "reading #{total} scroll(s)..." if total >= 6
+    to_read.each_with_index do |(scroll, rec), i|
+      say "reading scrolls... #{i}/#{total}" if total >= 6 && i.positive? && (i % 10).zero?
+      spells = read_scroll(scroll[:id])
+      if rec
+        apply_reread(rec, spells)
+      else
+        register_new(scroll, spells, claimed, now)
+      end
+    end
+
+    @dirty = true
+    say 'some containers could not be inspected - stored/carried status may be out of date' unless complete
+  end
+
+  def self.apply_reread(rec, spells)
+    return if spells.nil? # no answer; stays stale for next time
+
+    if spells.empty?
+      if rec[:unreadable]
+        rec[:stale] = false
+      else
+        records.delete(rec) # every charge was used up
+        say "#{rec[:name]} is spent - removed from the ledger"
+      end
+      return
+    end
+
+    rec[:spells] = spells
+    rec[:unreadable] = false
+    rec[:stale] = false
+  end
+
+  def self.register_new(scroll, spells, claimed, now)
+    return if spells.nil?
+
+    if spells.empty?
+      add_record(scroll, [], now, unreadable: true)
+      return
+    end
+
+    # Same name + same spells as a scroll we lost track of: it's that scroll,
+    # back under a new id, so its use history carries over.
+    twin = records.find do |r|
+      r[:status] == 'stored' && !r[:unreadable] && !claimed.include?(r[:uid]) &&
+        r[:name].to_s.casecmp?(scroll[:name]) && spell_nums(r[:spells]) == spell_nums(spells)
+    end
+    if twin
+      claimed << twin[:uid]
+      twin.merge!(id: scroll[:id], status: 'carried', container: scroll[:where], last_seen: now, stale: false)
+      twin[:spells] = spells
+    else
+      claimed << add_record(scroll, spells, now)[:uid]
+    end
+  end
+
+  def self.add_record(scroll, spells, now, unreadable: false)
+    rec = {
+      uid: data[:next_uid], id: scroll[:id], name: scroll[:name], status: 'carried',
+      container: scroll[:where], spells: spells, used: {}, unreadable: unreadable,
+      stale: false, first_seen: now, last_seen: now
+    }
+    data[:next_uid] += 1
+    records << rec
+    rec
+  end
+
+  ## ---- invoke tracking (hooks only observe; the main loop does the work) ----
+
+  def self.install_hooks
+    UpstreamHook.add(UPSTREAM_HOOK_ID, proc { |command| parse_upstream(command) })
+    DownstreamHook.add(OBSERVER_HOOK_ID, proc { |line| observe_line(line) })
+  end
+
+  def self.remove_hooks
+    UpstreamHook.remove(UPSTREAM_HOOK_ID)
+    DownstreamHook.remove(OBSERVER_HOOK_ID)
+    DownstreamHook.remove(CAPTURE_HOOK_ID)
+  end
+
+  # Runs on the input thread: remember which spell number is being invoked
+  # (vibrant-ink invokes never name the spell in their reply) and swallow our
+  # own ;commands.
+  def self.parse_upstream(command)
+    if (m = HOOK_CMD_RX.match(command))
+      CMD_QUEUE.push(m[1])
+      nil
+    else
+      if (m = INVOKE_CMD_RX.match(command.to_s.strip))
+        @pending_invoke = [m[1].to_i, Time.now]
+      end
+      command
+    end
+  end
+
+  # Runs on the socket thread - never blocks, never alters the line.
+  def self.observe_line(line)
+    return line unless line.include?('invoke') || line.include?('ink leaps') || line.include?('blank space')
+
+    text = strip_tags(line)
+    if (m = INVOKE_OK_RX.match(text))
+      push_event(:ok, m[2])
+    elsif VIBRANT_OK_RX.match?(text)
+      push_event(:vibrant, nil)
+    elsif (m = BLANK_RX.match(text))
+      push_event(:blank, m[1])
+    end
+    line
+  end
+
+  def self.push_event(kind, spell_name)
+    pending = @pending_invoke
+    num = pending && (Time.now - pending[1]) < PENDING_TTL ? pending[0] : nil
+    hands = [GameObj.right_hand, GameObj.left_hand].select { |o| scroll_obj?(o) }
+                                                    .map { |o| { id: o.id.to_s, name: o.name.to_s } }
+    EVENT_QUEUE.push({ kind: kind, spell_name: spell_name, num: num, hands: hands })
+  end
+
+  def self.drain_events
+    handle_event(EVENT_QUEUE.pop) until EVENT_QUEUE.empty?
+  end
+
+  def self.handle_event(ev)
+    held = ev[:hands].filter_map { |h| records.find { |r| r[:id] == h[:id] } }
+    @unknown_invoke = true if held.empty? && !ev[:hands].empty?
+
+    case ev[:kind]
+    when :ok, :vibrant
+      rec = held.find { |r| find_spell(r, ev[:num], ev[:spell_name]) } || (held.first if held.size == 1)
+      spell = rec && find_spell(rec, ev[:num], ev[:spell_name])
+      spell ||= rec[:spells].find { |s| s[:vibrant] } if rec && ev[:kind] == :vibrant && ev[:num].nil?
+      num = spell&.dig(:num) || ev[:num] || (ev[:spell_name] && lookup_num(ev[:spell_name]))
+      name = spell&.dig(:name) || ev[:spell_name]
+      record_use(rec, num, name)
+    when :blank
+      rec = held.find { |r| find_spell(r, nil, ev[:spell_name]) }
+      return unless rec
+
+      rec[:spells].delete_if { |s| s[:name].to_s.casecmp?(ev[:spell_name]) }
+      records.delete(rec) if rec[:spells].empty?
+      @dirty = true
+    end
+  end
+
+  def self.record_use(rec, num, name)
+    k = key(num || name)
+    entry = (usage[k] ||= { name: name.to_s, count: 0, last: 0 })
+    entry[:name] = name.to_s if entry[:name].to_s.empty?
+    entry[:count] += 1
+    entry[:last] = Time.now.to_i
+    if rec
+      rec[:used] ||= {}
+      rec[:used][k] = rec[:used].fetch(k, 0) + 1
+      rec[:stale] = true # next refresh re-reads it: spent spells drop off
+    end
+    @dirty = true
+  end
+
+  ## ---- output ----------------------------------------------------------------
+
+  def self.live_records
+    records.reject { |r| r[:unreadable] || r[:spells].empty? }
+  end
+
+  def self.scroll_label(group)
+    n = group.size
+    stored = group.count { |r| r[:status] == 'stored' }
+    label = group.first[:name].dup
+    label << " x#{n}" if n > 1
+    label << (n > 1 ? " (#{stored} stored)" : ' (stored)') if stored.positive?
+    label
+  end
+
+  def self.show_summary(only = nil)
+    t = proc { |s| Lich::Messaging.msg_format('thought', s, encode: false) }
+    b = proc { |s| Lich::Messaging.msg_format('bold', s, encode: false) }
+
+    by_spell = {}
+    live_records.each do |r|
+      r[:spells].each do |s|
+        next if only && !only.call(s)
+
+        (by_spell[s[:num]] ||= { name: s[:name], vibrant: s[:vibrant], recs: [] })[:recs] << r
+      end
+    end
+
+    carried = records.count { |r| r[:status] == 'carried' }
+    stored  = records.count { |r| r[:status] == 'stored' }
+    unread  = records.count { |r| r[:unreadable] }
+    _respond t.call("  Scroll Inventory v#{VERSION}  -  #{live_records.size} scroll(s): #{carried} carried, #{stored} stored")
+
+    if by_spell.empty?
+      _respond '  No scroll spells on record.' + (only ? '' : ' Run ;scriv to read your scrolls.')
+      return
+    end
+
+    by_spell.sort.each do |num, info|
+      groups = info[:recs].group_by { |r| r[:name].downcase }.values.sort_by { |g| g.first[:name].downcase }
+      used = usage.dig(key(num), :count).to_i
+      tags = []
+      tags << 'vibrant' if info[:vibrant]
+      tags << "used #{used}" if used.positive?
+      suffix = tags.empty? ? '' : "  (#{tags.join(', ')})"
+      _respond "  #{b.call(num.to_s.rjust(4))}  #{info[:name]} x#{info[:recs].size}#{suffix}  -  " \
+               "#{groups.map { |g| scroll_label(g) }.join(', ')}"
+    end
+
+    total_used = usage.values.sum { |v| v[:count].to_i }
+    foot = "  #{by_spell.size} spell(s), #{by_spell.values.sum { |v| v[:recs].size }} scroll charge(s) on record, #{total_used} use(s) tracked"
+    foot += ", #{unread} unreadable/blank" if unread.positive?
+    _respond t.call(foot)
+  end
+
+  def self.show_detail
+    t = proc { |s| Lich::Messaging.msg_format('thought', s, encode: false) }
+    _respond t.call("  Scroll Inventory v#{VERSION}  -  #{records.size} tracked scroll(s)")
+    records.sort_by { |r| [r[:status], r[:name].downcase, r[:uid]] }.each do |r|
+      where = r[:status] == 'carried' ? "in #{r[:container]} (id #{r[:id]})" : 'stored'
+      spells = if r[:unreadable]
+                 'unreadable or blank'
+               else
+                 r[:spells].map do |s|
+                   used = r.dig(:used, key(s[:num])).to_i
+                   "#{s[:num]} #{s[:name]}#{s[:vibrant] ? ' [vibrant]' : ''}#{used.positive? ? " (used #{used})" : ''}"
+                 end.join('; ')
+               end
+      _respond "  ##{r[:uid]}  #{r[:name]}  [#{where}]  #{spells}"
+    end
+  end
+
+  def self.show_help
+    t = proc { |s| Lich::Messaging.msg_format('thought', s, encode: false) }
+    b = proc { |s| Lich::Messaging.msg_format('bold', s, encode: false) }
+    w = proc { |s| Lich::Messaging.msg_format('whisper', s, encode: true) }
+
+    _respond t.call("  Scroll Inventory v#{VERSION}  -  Help Notes   (;scriv is the same as ;scrollinventory)")
+    _respond ''
+    _respond '  Keeps a ledger of your scrolls and the spells on them, and counts every invoke you make.'
+    _respond '  It only reads and observes - it never invokes or casts anything.'
+    _respond ''
+    _respond b.call('  -- Usage --')
+    _respond "  #{w.call(';scriv')}                 refresh (reads any new scrolls) and print the spell summary"
+    _respond "  #{w.call(';scriv list')}            print the last summary without touching the game"
+    _respond "  #{w.call(';scriv detail')}          every tracked scroll, its spells, location and use counts"
+    _respond "  #{w.call(';scriv spell 101')}       one spell (number or part of the name) and the scrolls holding it"
+    _respond "  #{w.call(';scriv scan')}            re-read every scroll you carry, not only new ones"
+    _respond "  #{w.call(';scriv forget <#>')}      drop one scroll from the ledger (# from detail)"
+    _respond "  #{w.call(';scriv prune')}           drop all scrolls marked stored"
+    _respond "  #{w.call(';scriv stop')}            stop the script (it stays running to track invokes)"
+    _respond ''
+    _respond '  Notes'
+    _respond '  - Scrolls in lockers can only be read once you take them out; after that they are remembered'
+    _respond '    by name + spell set and shown as "stored" until they turn up again under a new id.'
+    _respond '  - Amounts are scrolls holding the spell (each is at least one cast). Per-spell charges are'
+    _respond '    not visible to most professions, so "used" is what this script has watched you invoke.'
+    _respond '  - Only top-level contents of your worn containers are searched.'
+  end
+
+  ## ---- commands --------------------------------------------------------------
+
+  def self.drain_cmd_queue
+    handle_command(CMD_QUEUE.pop) until CMD_QUEUE.empty?
+  end
+
+  def self.handle_command(msg)
+    text = msg.to_s.strip
+
+    case text
+    when ''
+      refresh
+      show_summary
+    when /\Ahelp\z/i
+      show_help
+    when /\Alist\z/i
+      show_summary
+    when /\Adetail\z/i
+      refresh
+      show_detail
+    when /\Ascan\z/i
+      refresh(deep: true)
+      show_summary
+    when /\Aspell\s+(.+)\z/i
+      refresh
+      show_spell($1.strip)
+    when /\Aforget\s+#?(\d+)\z/i
+      forget($1.to_i)
+    when /\Aprune\z/i
+      prune
+    when /\A(?:stop|quit|exit)\z/i
+      say 'stopping.'
+      exit
+    else
+      say "unknown command #{text.inspect} - try ;scriv help"
+    end
+  end
+
+  def self.show_spell(query)
+    matcher = if query =~ /\A\d+\z/
+                ->(s) { s[:num] == query.to_i }
+              else
+                ->(s) { s[:name].to_s.downcase.include?(query.downcase) }
+              end
+    show_summary(matcher)
+  end
+
+  def self.forget(uid)
+    rec = records.find { |r| r[:uid] == uid }
+    return say("no scroll ##{uid} in the ledger") unless rec
+
+    records.delete(rec)
+    @dirty = true
+    say "forgot ##{uid} (#{rec[:name]})"
+  end
+
+  def self.prune
+    gone = records.select { |r| r[:status] == 'stored' }
+    records.reject! { |r| r[:status] == 'stored' }
+    @dirty = true
+    say "pruned #{gone.size} stored scroll(s)"
+  end
+
+  def self.main_loop
+    loop do
+      begin
+        drain_events
+        drain_cmd_queue
+        if @unknown_invoke
+          @unknown_invoke = false
+          say 'you invoked a scroll that is not in the ledger yet - run ;scriv to read it' if records.any?
+        end
+        if @dirty
+          @dirty = false
+          save_data!
+        end
+      rescue StandardError => e
+        say "error in main loop: #{e.class}: #{e.message}"
+      end
+      pause 0.25
+    end
+  end
+end
+
+if Script.current.vars[1] =~ /\Ahelp\z/i
+  ScrollInventory.show_help
+  exit
+end
+
+ScrollInventory.install_hooks
+
+before_dying do
+  ScrollInventory.remove_hooks
+  ScrollInventory.save_data!
+end
+
+ScrollInventory::CMD_QUEUE.push(Script.current.vars[1..-1].to_a.join(' '))
+ScrollInventory.main_loop
