@@ -173,7 +173,7 @@
 <header>
   <div>
     <h1>GS4-Enhanced-Playershop-Interface (GS4EPI)</h1>
-    <div class="sub">Scrapes shops.elanthia.online live (using its own item classification engine) · saved searches persist in this file's local storage</div>
+    <div class="sub">Scrapes shops.elanthia.online live (using its own item classification engine) · saved searches are written to GS4EPI-saved-searches.js beside this file</div>
     <div id="engineNote" style="display:none; color:#e7b24b; font-size:11.5px; margin-top:4px;">⚠ Could not load shops.elanthia.online's classification engine (offline, or their asset paths changed) — using this app's built-in fallback parser instead. Item type / worn location accuracy may be lower; use the raw text search box as a safety net.</div>
   </div>
   <div style="display:flex; align-items:center; gap:12px;">
@@ -221,6 +221,12 @@
 
           <label class="field" style="margin-top:10px;">Enhancive Match Minimum <span class="infoIcon" title="How many enhancive matches from &quot;Enhancive Targets&quot; should this item have?">ⓘ</span></label>
           <input type="number" id="enhMatchMin" placeholder="e.g. 2">
+
+          <label class="field" style="margin-top:10px;">Single Enhancive Minimum <span class="infoIcon" title="Only list items where at least one enhancive line is +N or more (e.g. 15 keeps items with a +15 or higher on any one line). With no Enhancive Targets, both bonuses and ranks count. With targets, only the kinds you targeted count: bonus lines if you targeted a bonus, rank lines if you targeted ranks, both if you targeted both.">ⓘ</span></label>
+          <input type="number" id="enhSingleMin" placeholder="e.g. 15">
+          <label class="field" style="display:flex; align-items:center; gap:6px; margin-top:6px; cursor:pointer;" title="When checked, only enhancive lines that are one of your Enhancive Targets count toward the Single Enhancive Minimum. Has no effect if you have no targets.">
+            <input type="checkbox" id="enhSingleTargetsOnly" style="width:auto;"> Only apply to enhancive targets
+          </label>
 
           <div class="subLabel" style="margin-top:14px;">Enhancive Score</div>
           <div class="row2">
@@ -271,6 +277,10 @@
         <button id="cancelEditBtn" class="mini" style="display:none;">Cancel</button>
       </div>
       <ul id="savedList"></ul>
+      <div style="display:flex; align-items:center; gap:6px; margin-top:8px;">
+        <div class="helpNote" id="saveFileStatus" style="flex:1; margin-top:0;"></div>
+        <button id="linkFileBtn" class="mini" title="Choose the file saved searches are written to. Put it in the same folder as this HTML file and keep the name GS4EPI-saved-searches.js so it loads automatically.">Link file…</button>
+      </div>
       <div class="savebar" style="margin-top:10px;">
         <button id="runSelectedBtn" class="primary" style="flex:1;">Run Selected Saved Search</button>
       </div>
@@ -284,13 +294,15 @@
   </main>
 </div>
 
+<!-- Saved searches written by this page. Missing on first run, which is fine. -->
+<script src="GS4EPI-saved-searches.js"></script>
 <script>
 /* =========================================================
    CONFIG / VOCAB
    ========================================================= */
 const BASE = 'https://shops.elanthia.online';
 const CORE_STATS = ['Strength','Constitution','Dexterity','Agility','Discipline','Aura','Logic','Intuition','Wisdom','Influence'];
-const APP_VERSION = '1.7.3';
+const APP_VERSION = '1.8.0';
 function isCoreBonusAbility(name) {
   return CORE_STATS.some(s => new RegExp('^' + s + '\\s+Bonus\\b', 'i').test((name || '').trim()));
 }
@@ -703,6 +715,27 @@ function itemHasTarget(it) {
   return countTargetMatches(it) > 0;
 }
 
+// "Single Enhancive Minimum": does any one enhancive line reach the given boost? With no
+// targets every line counts; with targets, only lines of the kinds targeted (bonus / ranks).
+function isRanksAbility(name) { return /\bRanks$/i.test((name || '').trim()); }
+// With targetsOnly (and at least one target), only lines naming a chosen target count.
+function hasEnhanciveAtLeast(it, min, targets, targetsOnly) {
+  let allowRanks = true, allowBonus = true;
+  if (targetsOnly && targets && targets.length) {
+    const names = new Set(targets.map(t => t.name));
+    return (it.enhancives || []).some(e => names.has(e.ability) && e.boost >= min);
+  }
+  if (targets && targets.length) {
+    allowRanks = targets.some(t => isRanksAbility(t.name));
+    allowBonus = targets.some(t => !isRanksAbility(t.name));
+  }
+  return (it.enhancives || []).some(e => {
+    const ranks = isRanksAbility(e.ability);
+    if (ranks ? !allowRanks : !allowBonus) return false;
+    return e.boost >= min;
+  });
+}
+
 function renderTargetChips() {
   const el = document.getElementById('targetChips');
   el.innerHTML = ENHANCIVE_TARGETS.map((t, i) => `
@@ -875,6 +908,8 @@ function readFilterForm() {
     enhMin: numOrNull('enhMin'), enhMax: numOrNull('enhMax'),
     enhValMin: numOrNull('enhValMin'), enhValMax: numOrNull('enhValMax'),
     enhMatchMin: numOrNull('enhMatchMin'),
+    enhSingleMin: numOrNull('enhSingleMin'),
+    enhSingleTargetsOnly: document.getElementById('enhSingleTargetsOnly').checked,
     excludeRanks: document.getElementById('excludeRanksChk').checked,
     priceMin: numOrNull('priceMin'), priceMax: numOrNull('priceMax'),
     nameContains: document.getElementById('nameContains').value.trim(),
@@ -905,6 +940,8 @@ function writeFilterForm(f) {
   document.getElementById('enhValMin').value = f.enhValMin ?? '';
   document.getElementById('enhValMax').value = f.enhValMax ?? '';
   document.getElementById('enhMatchMin').value = f.enhMatchMin ?? '';
+  document.getElementById('enhSingleMin').value = f.enhSingleMin ?? '';
+  document.getElementById('enhSingleTargetsOnly').checked = !!f.enhSingleTargetsOnly;
   document.getElementById('excludeRanksChk').checked = !!f.excludeRanks;
   document.getElementById('priceMin').value = f.priceMin ?? '';
   document.getElementById('priceMax').value = f.priceMax ?? '';
@@ -984,8 +1021,9 @@ function matchesFilter(item, f) {
   if (f.enhMax != null && item.enhanciveScore > f.enhMax) return false;
   if (f.enhValMin != null && (item.enhValue == null || item.enhValue < f.enhValMin)) return false;
   if (f.enhValMax != null && (item.enhValue == null || item.enhValue > f.enhValMax)) return false;
-  if (f.excludeRanks && (item.enhancives || []).some(e => /\bRanks$/i.test((e.ability || '').trim()))) return false;
+  if (f.excludeRanks && (item.enhancives || []).some(e => isRanksAbility(e.ability))) return false;
   if (f.enhMatchMin != null && countTargetMatchesAgainst(item, f.targets) < f.enhMatchMin) return false;
+  if (f.enhSingleMin != null && !hasEnhanciveAtLeast(item, f.enhSingleMin, f.targets, f.enhSingleTargetsOnly)) return false;
   if (f.priceMin != null && (item.price == null || item.price < f.priceMin)) return false;
   if (f.priceMax != null && (item.price == null || item.price > f.priceMax)) return false;
   if (f.nameContains && !matchesTextQuery(item.name, f.nameContains)) return false;
@@ -994,11 +1032,145 @@ function matchesFilter(item, f) {
 }
 
 /* =========================================================
-   SAVED SEARCHES (localStorage)
+   SAVED SEARCHES — written to GS4EPI-saved-searches.js beside this HTML file (loaded by
+   the <script src> above as window.GS4EPI_SAVED_FILE), with localStorage as a cache.
+   Browsers can't write to a file:// page's folder on their own, so the file is linked
+   once through the File System Access API (Chrome / Edge) and its handle kept in
+   IndexedDB. Browsers without that API download the file instead.
    ========================================================= */
 const LS_KEY = 'gs4_enh_hunter_saved_searches_v1';
-function getSaved() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch(e) { return []; } }
-function setSaved(arr) { localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+const LS_SAVED_AT_KEY = 'gs4_enh_hunter_saved_searches_at_v1';
+const SAVE_FILE_NAME = 'GS4EPI-saved-searches.js';
+const CAN_WRITE_FILES = typeof window.showSaveFilePicker === 'function';
+let SAVED_SEARCHES = [];
+let saveFileHandle = null;
+let saveFilePickerDeclined = false; // cancelled the picker: stop auto-opening it until "Link file…"
+
+function getSaved() { return JSON.parse(JSON.stringify(SAVED_SEARCHES)); }
+function setSaved(arr) {
+  SAVED_SEARCHES = JSON.parse(JSON.stringify(arr));
+  const savedAt = Date.now();
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(SAVED_SEARCHES));
+    localStorage.setItem(LS_SAVED_AT_KEY, String(savedAt));
+  } catch (e) {}
+  writeSaveFile(savedAt, false);
+}
+
+function saveFileContents(savedAt) {
+  const payload = { app: 'GS4EPI', version: APP_VERSION, savedAt, searches: SAVED_SEARCHES };
+  return '// GS4EPI saved searches. Written by GS4EPI.html; keep it in the same folder.\n'
+    + 'window.GS4EPI_SAVED_FILE = ' + JSON.stringify(payload, null, 2) + ';\n';
+}
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('gs4epi', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction('kv').objectStore('kv').get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, value) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function pickSaveFile() {
+  const handle = await window.showSaveFilePicker({
+    suggestedName: SAVE_FILE_NAME,
+    types: [{ description: 'GS4EPI saved searches', accept: { 'text/javascript': ['.js'] } }],
+  });
+  saveFileHandle = handle;
+  try { await idbSet('saveFileHandle', handle); } catch (e) { console.error('Could not remember save file', e); }
+  return handle;
+}
+
+// Called from click handlers, so the permission prompt / file picker are allowed to open.
+// `pick` forces the picker even when a file is already linked.
+async function writeSaveFile(savedAt, pick) {
+  if (!CAN_WRITE_FILES) {
+    if (pick) downloadSaveFile(savedAt);
+    else setSaveFileState(`This browser can't write files directly; use "Download file" and put it beside GS4EPI.html.`);
+    return;
+  }
+  if (!pick && !saveFileHandle && saveFilePickerDeclined) return;
+  try {
+    if (pick || !saveFileHandle) await pickSaveFile();
+    let perm = await saveFileHandle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') perm = await saveFileHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') { setSaveFileState('⚠ No permission to write the save file; searches are only in browser storage.'); return; }
+    const w = await saveFileHandle.createWritable();
+    await w.write(saveFileContents(savedAt));
+    await w.close();
+    setSaveFileState(`Saved to ${saveFileHandle.name} · ${new Date(savedAt).toLocaleTimeString()}`);
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      if (!saveFileHandle) saveFilePickerDeclined = true;
+      setSaveFileState('⚠ No save file linked; searches are only in browser storage. Click "Link file…".');
+    } else { console.error('Writing save file failed', e); setSaveFileState('⚠ Could not write the save file: ' + (e && e.message || e)); }
+  }
+}
+
+function downloadSaveFile(savedAt) {
+  const blob = new Blob([saveFileContents(savedAt)], { type: 'text/javascript' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = SAVE_FILE_NAME;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  setSaveFileState(`Downloaded ${SAVE_FILE_NAME}; move it beside GS4EPI.html to load it next time.`);
+}
+
+function setSaveFileState(s) { document.getElementById('saveFileStatus').textContent = s; }
+
+// Use whichever copy is newer: the file beside the HTML, or this browser's cache.
+async function loadSavedSearches() {
+  const fileData = window.GS4EPI_SAVED_FILE;
+  let lsList = null, lsAt = 0;
+  try {
+    lsList = JSON.parse(localStorage.getItem(LS_KEY));
+    lsAt = Number(localStorage.getItem(LS_SAVED_AT_KEY)) || 0;
+  } catch (e) {}
+  const fileOk = fileData && Array.isArray(fileData.searches);
+  if (fileOk && (fileData.savedAt || 0) >= lsAt) {
+    SAVED_SEARCHES = fileData.searches;
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(SAVED_SEARCHES));
+      localStorage.setItem(LS_SAVED_AT_KEY, String(fileData.savedAt || 0));
+    } catch (e) {}
+    setSaveFileState(`Loaded ${SAVED_SEARCHES.length} search(es) from ${SAVE_FILE_NAME}.`);
+  } else {
+    SAVED_SEARCHES = Array.isArray(lsList) ? lsList : [];
+    if (fileOk) setSaveFileState(`⚠ Browser copy is newer than ${SAVE_FILE_NAME}; it will be rewritten on your next save.`);
+    else if (SAVED_SEARCHES.length) setSaveFileState(`⚠ ${SAVE_FILE_NAME} not found beside this page; searches are only in browser storage. Click "${CAN_WRITE_FILES ? 'Link file…' : 'Download file'}".`);
+    else setSaveFileState(`Saved searches will be written to ${SAVE_FILE_NAME}.`);
+  }
+  if (CAN_WRITE_FILES) {
+    try { saveFileHandle = (await idbGet('saveFileHandle')) || null; } catch (e) {}
+  } else {
+    document.getElementById('linkFileBtn').textContent = 'Download file';
+  }
+}
+
+document.getElementById('linkFileBtn').addEventListener('click', () => {
+  let savedAt = 0;
+  try { savedAt = Number(localStorage.getItem(LS_SAVED_AT_KEY)) || 0; } catch (e) {}
+  writeSaveFile(savedAt || Date.now(), true);
+});
 
 let editingIdx = null;
 
@@ -1101,7 +1273,7 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
   if (editingIdx !== null) exitEditMode();
   writeFilterForm({
     itemTypes: [], wornLocations: [], properties: [],
-    enhMin: null, enhMax: null, enhValMin: null, enhValMax: null, enhMatchMin: null,
+    enhMin: null, enhMax: null, enhValMin: null, enhValMax: null, enhMatchMin: null, enhSingleMin: null, enhSingleTargetsOnly: false,
     excludeRanks: false, priceMin: null, priceMax: null,
     nameContains: '', rawContains: '', targets: [],
   });
@@ -1137,6 +1309,7 @@ function describeFilters(f) {
   if (f.rawContains) parts.push(`Raw text: ${f.rawContains}`);
   if (f.targets && f.targets.length) parts.push(`Targets: ${f.targets.map(t => t.min != null ? `${t.name} (min ${t.min})` : t.name).join(', ')}`);
   if (f.enhMatchMin != null) parts.push(`Enh Match Min: ${f.enhMatchMin}`);
+  if (f.enhSingleMin != null) parts.push(`Single Enh Min: +${f.enhSingleMin}${f.enhSingleTargetsOnly ? ' (targets only)' : ''}`);
   if (CONTEXTUAL_VALUE) parts.push('Contextual value on');
   return parts.length ? parts.join(' · ') : 'No filters applied';
 }
@@ -1360,6 +1533,7 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
 });
 
 (async function init() {
+  await loadSavedSearches();
   renderSavedList();
   // Targets live inside the current-form state (and are also embedded per-saved-search).
   // As a safety net against a corrupted/partial current-form blob, also fall back to the
