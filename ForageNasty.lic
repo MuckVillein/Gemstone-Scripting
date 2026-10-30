@@ -1,0 +1,113 @@
+# frozen_string_literal: true
+
+=begin
+
+ForageNasty.lic waits for "For some reason, you are unable to do that." then pauses ebounty, travels to the supernode, taps the band, goes to the mirtag and hands over whatever is in your hands, then unpauses ebounty and goes back to waiting. Runs until killed.
+
+The following inputs are available:
+	;foragenasty            - run until killed
+
+      author: Kyrandos
+      Other scripts: Combatical, VolnRestore2, Merchantical, Loresang, isharpie, scriv
+      game: gs
+      tags: utility, bounty, forage
+      version: 1.0.0
+      required: Lich > 5.0
+
+			\\Version\\
+			1.0.0 10/30/2026 - initial release
+
+=end
+
+module ForageNasty
+  VERSION = '1.0.0'
+  TRIGGER = 'For some reason, you are unable to do that.'
+  SUPERNODE_ROOM = 'Birthing Sands, Cavern of Ages'
+  SUPERNODE_ID = 2635
+
+  def self.say(text)
+    _respond Lich::Messaging.msg_format('info', "[ForageNasty] #{text}")
+  end
+
+  def self.run_script(name, args = [])
+    start_script(name, args)
+    sleep 0.5
+    # go2 restarts itself mid-route (e.g. after a mirror), so only count it as done once it stays gone
+    idle = 0
+    while idle < 3
+      idle = running?(name) ? 0 : idle + 1
+      sleep 0.5
+    end
+  end
+
+  def self.hand_nouns
+    [GameObj.right_hand, GameObj.left_hand].map { |o| o&.noun }.compact.reject(&:empty?)
+  end
+
+  def self.hands_full?
+    reply = dothistimeout('glance', 5, /You glance down/)
+    return false unless reply
+
+    !reply.include?('nothing in your')
+  end
+
+  def self.at_supernode?
+    Room.current&.id == SUPERNODE_ID ||
+      XMLData.room_title.to_s.include?(SUPERNODE_ROOM) ||
+      Array(Room.current&.title).join.include?(SUPERNODE_ROOM)
+  end
+
+  # go2 hides room names while travelling, so XMLData can be stale; try a look if it never matches
+  def self.wait_for_supernode
+    2.times do |pass|
+      fput 'look' if pass == 1
+      20.times do
+        return true if at_supernode?
+        sleep 0.25
+      end
+    end
+    false
+  end
+
+  def self.handle
+    unless hands_full?
+      say 'Both hands are not full yet, waiting.'
+      return
+    end
+
+    say 'Both hands full, pausing ebounty and heading to the supernode.'
+    pause_script 'ebounty'
+    run_script('go2', ['supernode'])
+    unpause_script 'go2'
+
+    unless wait_for_supernode
+      say "Never saw #{SUPERNODE_ROOM}, giving up this round."
+      unpause_script 'ebounty'
+      return
+    end
+    fput 'rub my band'
+    run_script('go2', ['mirtag'])
+
+    hand_nouns.first(2).each { |noun| fput "give #{noun} to mirtag" }
+
+    unpause_script 'ebounty'
+    say 'Done, waiting for the next trigger.'
+  end
+
+  def self.run
+    say "v#{VERSION} running, waiting for: #{TRIGGER}"
+    loop do
+      line = get
+      next unless line.to_s.include?(TRIGGER)
+
+      begin
+        handle
+      rescue StandardError => e
+        say "Error: #{e.class}: #{e.message}"
+        unpause_script 'ebounty'
+      end
+    end
+  end
+end
+
+ForageNasty.run
