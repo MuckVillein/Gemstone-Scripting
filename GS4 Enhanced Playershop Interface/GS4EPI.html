@@ -659,6 +659,34 @@ async function loadAllData() {
   document.getElementById('engineNote').style.display = USING_FALLBACK ? 'block' : 'none';
   rebuildAbilityNameIndex();
   refreshEnhValues();
+  assignLockKeyMatches();
+}
+
+// Locks and keys: a lock and a key of exactly the same colour combine for a reward. Both carry
+// "...an overwhelming desire to complete the pair" and open with "The <colour> lock|key appears".
+// Colours present as both a lock and a key (anywhere in the loaded shops) are numbered
+// alphabetically; the number is only stable for as long as the same set of pairs is on sale.
+function getLockKeyInfo(it) {
+  const text = itemRawText(it);
+  if (!/desire to complete the pair/i.test(text)) return null;
+  const m = text.match(/\bThe (.+?) (lock|key) appears\b/i);
+  if (!m) return null;
+  return { color: m[1].trim().toLowerCase(), kind: m[2].toLowerCase() };
+}
+function assignLockKeyMatches() {
+  const byColor = new Map();
+  for (const it of ALL_ITEMS) {
+    it.lockKeyMatch = null;
+    const info = getLockKeyInfo(it);
+    if (!info) continue;
+    if (!byColor.has(info.color)) byColor.set(info.color, { lock: [], key: [] });
+    byColor.get(info.color)[info.kind].push(it);
+  }
+  const matched = [...byColor.entries()].filter(([, v]) => v.lock.length && v.key.length)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  matched.forEach(([color, v], i) => {
+    for (const it of v.lock.concat(v.key)) it.lockKeyMatch = { num: i + 1, color };
+  });
 }
 
 function setStatus(s) { document.getElementById('status').textContent = s; }
@@ -1384,6 +1412,7 @@ function sortAndRender() {
       <th data-key="enhanciveScore">Enh. Score</th>
       <th data-key="enhValue">Enh Value</th>
       <th>Properties</th>
+      <th>Misc</th>
       <th data-key="town">Town / Shop</th>
       <th>Matched Search</th>
       <th>Recall Line</th>
@@ -1438,6 +1467,26 @@ function getImbedInfo(it) {
   };
 }
 
+// Misc column: one-off facts buried in the description. Each extractor returns an HTML string or null.
+//  - Spell specialization books: "...add 3 spell specialization ranks to casting the spell
+//    Confusion (1211)."  Shows the spell number, with the name and rank count alongside.
+const MISC_EXTRACTORS = [
+  function specBook(text) {
+    const m = text.match(/add\s+(\d+)\s+spell specialization ranks?\s+to casting the spell\s+(.+?)\s*\((\d+)\)/i);
+    if (!m) return null;
+    return `<b>${escapeHtml(m[3])}</b> <span title="Spell specialization book">${escapeHtml(m[2])} (+${escapeHtml(m[1])} ranks)</span>`;
+  },
+];
+function getMiscHtml(it) {
+  const text = itemRawText(it);
+  const parts = MISC_EXTRACTORS.map(fn => fn(text));
+  if (it.lockKeyMatch) {
+    parts.push(`<b>Match #${it.lockKeyMatch.num}</b> <span title="A lock and key of this colour are both for sale">${escapeHtml(it.lockKeyMatch.color)}</span>`);
+  }
+  return parts.filter(Boolean)
+    .map(h => `<div class="enh-line">${h}</div>`).join('');
+}
+
 function renderRow(r) {
   const it = r.item;
   const isTargetHit = itemHasTarget(it);
@@ -1487,6 +1536,7 @@ function renderRow(r) {
     <td class="score">${it.enhanciveScore || '—'}</td>
     <td class="score">${it.enhValue != null ? it.enhValue.toFixed(2) : '—'}</td>
     <td>${tagHtml}</td>
+    <td>${getMiscHtml(it) || '—'}</td>
     <td>${escapeHtml(it.town || '')}${shopLabel ? ' / ' + shopLabel : ''}</td>
     <td>${(r.matches||[]).map(m => `<span class="badge">${escapeHtml(m)}</span>`).join('')}</td>
     <td>
